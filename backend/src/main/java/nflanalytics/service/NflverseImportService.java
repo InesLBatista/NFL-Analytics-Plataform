@@ -5,6 +5,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,11 +19,13 @@ import com.opencsv.CSVReader;
 import lombok.RequiredArgsConstructor;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
+import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.Player;
 import nflanalytics.model.PlayerStats;
 import nflanalytics.model.Team;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
+import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerRepository;
 import nflanalytics.repository.PlayerStatsRepository;
 import nflanalytics.repository.TeamRepository;
@@ -37,6 +41,10 @@ public class NflverseImportService {
     private final PlayerRepository playerRepository;
     private final PlayerStatsRepository playerStatsRepository;
     private final GameStatsRepository gameStatsRepository;
+    private final PlayByPlayRepository playByPlayRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private jakarta.persistence.EntityManager entityManager;
 
     private static final String TEAMS_CSV_URL  = "https://github.com/nflverse/nflverse-data/releases/download/teams/teams_colors_logos.csv";
     private static final String GAMES_CSV_URL  = "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv";
@@ -333,6 +341,129 @@ public class NflverseImportService {
             }
             log.info("Imported GameStats: {} | no team: {} | no game: {}", imported, skippedNoTeam, skippedNoGame);
         }
+    }
+
+    public void importPlayByPlay(int season) throws Exception {
+        long existing = playByPlayRepository.countBySeason(season);
+        if (existing > 0) {
+            System.out.println(season + "season already has" + existing + " imported plays. Skipping.");
+            return;
+        }
+
+    
+        List<Game> seasonGames = gameRepository.findBySeason(season);
+        Map<String, Game> gameLookup = new HashMap<>();
+        for (Game g : seasonGames) {
+            String key = buildGameKey(g.getWeek(), g.getHomeTeam().getAbbreviation(), g.getAwayTeam().getAbbreviation());
+            gameLookup.put(key, g);
+        }
+        System.out.println("Games pre-loaded for lookup: " + gameLookup.size());
+
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_" + season + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns count: " + header.length);
+
+            String[] row;
+            int imported = 0;
+            int skippedNoGame = 0;
+            List<PlayByPlay> batch = new ArrayList<>();
+            int batchSize = 500;
+
+            while ((row = reader.readNext()) != null) {
+                String homeTeam = getOrNull(row, col, "home_team");
+                String awayTeam = getOrNull(row, col, "away_team");
+                String weekStr = getOrNull(row, col, "week");
+                if (homeTeam == null || awayTeam == null || weekStr == null) continue;
+
+                Integer week = (int) Double.parseDouble(weekStr);
+                String key = buildGameKey(week, homeTeam, awayTeam);
+                Game game = gameLookup.get(key);
+                if (game == null) {
+                    skippedNoGame++;
+                    continue;
+                }
+
+                PlayByPlay play = new PlayByPlay();
+                play.setGame(game);
+                play.setSeason(season);
+                play.setWeek(week);
+
+                String nflverseGameId = getOrNull(row, col, "game_id");
+                String playId = getOrNull(row, col, "play_id");
+                play.setExternalPlayId(nflverseGameId + "_" + playId);
+
+                play.setQuarter(parseIntSafe(getOrNull(row, col, "qtr")));
+                play.setDown(parseIntSafe(getOrNull(row, col, "down")));
+                play.setYardsToGo(parseIntSafe(getOrNull(row, col, "ydstogo")));
+                play.setYardlineNumber(parseIntSafe(getOrNull(row, col, "yardline_100")));
+                play.setPlayType(getOrNull(row, col, "play_type"));
+                play.setDescription(getOrNull(row, col, "desc"));
+                play.setPosTeam(getOrNull(row, col, "posteam"));
+                play.setDefTeam(getOrNull(row, col, "defteam"));
+                play.setYardsGained(parseIntSafe(getOrNull(row, col, "yards_gained")));
+
+                play.setEpa(parseDoubleSafe(getOrNull(row, col, "epa")));
+                play.setWpa(parseDoubleSafe(getOrNull(row, col, "wpa")));
+                play.setSuccess(parseBooleanSafe(getOrNull(row, col, "success")));
+                play.setTouchdown(parseBooleanSafe(getOrNull(row, col, "touchdown")));
+                play.setInterception(parseBooleanSafe(getOrNull(row, col, "interception")));
+                play.setFumble(parseBooleanSafe(getOrNull(row, col, "fumble")));
+                play.setSack(parseBooleanSafe(getOrNull(row, col, "sack")));
+                play.setPenalty(parseBooleanSafe(getOrNull(row, col, "penalty")));
+
+                play.setPasserName(getOrNull(row, col, "passer_player_name"));
+                play.setRusherName(getOrNull(row, col, "rusher_player_name"));
+                play.setReceiverName(getOrNull(row, col, "receiver_player_name"));
+
+                play.setGameSecondsRemaining(parseIntSafe(getOrNull(row, col, "game_seconds_remaining")));
+                play.setPosteamScore(parseIntSafe(getOrNull(row, col, "posteam_score")));
+                play.setDefteamScore(parseIntSafe(getOrNull(row, col, "defteam_score")));
+
+                batch.add(play);
+                imported++;
+
+
+
+                if (batch.size() >= batchSize) {
+                    playByPlayRepository.saveAll(batch);
+                    entityManager.flush();
+                    entityManager.clear();
+                    batch.clear();
+                }
+            }
+
+            if (!batch.isEmpty()) {
+                playByPlayRepository.saveAll(batch);
+                entityManager.flush();
+                entityManager.clear();
+            }
+
+            System.out.println("Imported PlayByPlay: " + imported + " | without corresponding game: " + skippedNoGame);
+        }
+    }
+
+    //chave para o lookup em memória de jogos 
+    private String buildGameKey(Integer week, String team1, String team2) {
+        String[] teams = { team1, team2 };
+        java.util.Arrays.sort(teams);
+        return week + "_" + teams[0] + "_" + teams[1];
+    }
+
+    private Double parseDoubleSafe(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Boolean parseBooleanSafe(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.equals("1") || value.equalsIgnoreCase("true");
     }
 
     //opens the CSV directly from the URL without saving to disk
