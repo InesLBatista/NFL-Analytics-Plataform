@@ -3,6 +3,7 @@ package nflanalytics.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,6 +13,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
     @Value("${admin.username}")
     private String adminUsername;
@@ -24,8 +26,9 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable()) //desativa proteção CSRF já que não é necessária numa API stateless consumida por outra app
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/admin/**").authenticated()   //login to this only for now
-                .anyRequest().permitAll() //permite todos os pedidos sem autenticação, por agora
+                .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/import/**").authenticated() //agora protegido por @PreAuthorize(ADMIN)
+                .anyRequest().permitAll()
             )
             .httpBasic(basic -> {})
             .formLogin(form -> form.disable());  //desativa a página de login por formulário
