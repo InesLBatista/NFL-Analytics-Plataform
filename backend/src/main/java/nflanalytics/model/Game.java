@@ -35,8 +35,7 @@ public class Game {
     @JoinColumn(name = "away_team_id", nullable = false)
     private Team awayTeam;
 
-    @Column(nullable = false)
-    private LocalDateTime gameTeam;
+    private LocalDateTime gameDate;
 
     @Column(nullable = false)
     private Integer week;

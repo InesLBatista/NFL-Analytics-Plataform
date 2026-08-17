@@ -20,15 +20,14 @@ public class Team {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = false)
+    @Column(nullable = false, unique = true)
+    private String abbreviation;
+
+    @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, unique = true)
     private String conference;
-
-    @Column(nullable = false, unique = false)
     private String division;
 
-    private String city;
     private String logoUrl; //to use later to fetch for the frontend
 }
