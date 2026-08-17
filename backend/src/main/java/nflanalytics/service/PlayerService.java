@@ -27,7 +27,6 @@ public class PlayerService {
         return playerRepository.findByFullNameContainingIgnoreCase(name);
     }
 
-    // todos os jogadores de uma equipa pela sigla
     public List<Player> getPlayersByTeam(String abbreviation) {
         return playerRepository.findByTeam_Abbreviation(abbreviation);
     }
