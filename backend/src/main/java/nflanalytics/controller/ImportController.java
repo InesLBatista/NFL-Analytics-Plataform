@@ -93,4 +93,15 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import draft picks: " + e.getMessage());
         }
     }
+
+    @PostMapping("/injuries/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importInjuries(@PathVariable int season) {
+        try {
+            importService.importInjuries(season);
+            return ResponseEntity.ok("Injuries imported for season " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import injuries: " + e.getMessage());
+        }
+    }
 }

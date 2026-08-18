@@ -6,12 +6,13 @@
 package nflanalytics.service;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
 import nflanalytics.model.Injury;
-import nflanalytics.model.PlayerStats;
 import nflanalytics.repository.InjuryRepository;
 import nflanalytics.repository.PlayerStatsRepository;
 
@@ -25,23 +26,41 @@ public class PlayerAvailabilityService {
     public int countGamesMissedDueToInjury(Long playerId, Integer season) {
         List<Injury> history = injuryRepository.findByPlayer_IdAndSeasonOrderByWeek(playerId, season);
 
+        //every game_id that a player has stats in a single query
+        //changed to avoid N+1
+        Set<Long> gamesWithStats = playerStatsRepository.findByPlayer_Id(playerId).stream()
+                .map(ps -> ps.getGame().getId())
+                .collect(Collectors.toSet());
+
         return (int) history.stream()
                 .filter(injury -> "Out".equalsIgnoreCase(injury.getReportStatus()))
                 .filter(injury -> injury.getGame() != null)
-                .filter(injury -> !hasPlayerStatsForGame(playerId, injury.getGame().getId()))
+                .filter(injury -> !gamesWithStats.contains(injury.getGame().getId()))
                 .count();
     }
 
     //if a player, despite the injury on the report, played
     public boolean playedDespiteInjury(Long playerId, Long gameId) {
-        return hasPlayerStatsForGame(playerId, gameId);
+        return playerStatsRepository.existsByPlayer_IdAndGame_Id(playerId, gameId);
+    }
+
+    //returns injury's history of a single playes with a flag of participation in every game
+    //to use in the frontend building timeline of availibily 
+    public List<InjuryAvailability> getAvailabilityTimeline(Long playerId, Integer season) {
+        List<Injury> history = injuryRepository.findByPlayer_IdAndSeasonOrderByWeek(playerId, season);
+
+        Set<Long> gamesWithStats = playerStatsRepository.findByPlayer_Id(playerId).stream()
+                .map(ps -> ps.getGame().getId())
+                .collect(Collectors.toSet());
+
+        return history.stream()
+                .map(injury -> new InjuryAvailability(
+                        injury,
+                        injury.getGame() != null && gamesWithStats.contains(injury.getGame().getId())
+                ))
+                .collect(Collectors.toList());
     }
 
 
-    
-    private boolean hasPlayerStatsForGame(Long playerId, Long gameId) {
-        List<PlayerStats> stats = playerStatsRepository.findByGame_Id(gameId);
-        return stats.stream().anyMatch(ps -> ps.getPlayer().getId().equals(playerId));
-    }
-
+    public record InjuryAvailability(Injury injury, boolean actuallyPlayed) {}
 }
