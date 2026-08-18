@@ -5,7 +5,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -73,17 +72,25 @@ public class ImportController {
         }
     }
 
-
-
-    @PostMapping("/draft-picks")
-    public String importDraftPicks() throws Exception {
-        importService.importDraftPicks();
-        return "Draft picks import completed.";
+    @PostMapping("/officials/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importOfficials(@PathVariable int season) {
+        try {
+            importService.importOfficials(season);
+            return ResponseEntity.ok("Officials imported for season " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import officials: " + e.getMessage());
+        }
     }
 
-    @PostMapping("/officials")
-    public String importOfficials(@RequestParam int season) throws Exception {
-        importService.importOfficials(season);
-        return "Officials import completed for season " + season;
+    @PostMapping("/draft-picks")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importDraftPicks() {
+        try {
+            importService.importDraftPicks();
+            return ResponseEntity.ok("Draft picks imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import draft picks: " + e.getMessage());
+        }
     }
 }
