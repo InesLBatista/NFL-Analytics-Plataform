@@ -5,6 +5,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -70,5 +71,19 @@ public class ImportController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Failed to import game stats: " + e.getMessage());
         }
+    }
+
+
+
+    @PostMapping("/draft-picks")
+    public String importDraftPicks() throws Exception {
+        importService.importDraftPicks();
+        return "Draft picks import completed.";
+    }
+
+    @PostMapping("/officials")
+    public String importOfficials(@RequestParam int season) throws Exception {
+        importService.importOfficials(season);
+        return "Officials import completed for season " + season;
     }
 }

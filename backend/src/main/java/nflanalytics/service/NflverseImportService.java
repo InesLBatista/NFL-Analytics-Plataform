@@ -17,14 +17,18 @@ import org.springframework.stereotype.Service;
 
 import com.opencsv.CSVReader;
 import lombok.RequiredArgsConstructor;
+import nflanalytics.model.DraftPick;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
+import nflanalytics.model.Official;
 import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.Player;
 import nflanalytics.model.PlayerStats;
 import nflanalytics.model.Team;
+import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
+import nflanalytics.repository.OfficialRepository;
 import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerRepository;
 import nflanalytics.repository.PlayerStatsRepository;
@@ -42,6 +46,8 @@ public class NflverseImportService {
     private final PlayerStatsRepository playerStatsRepository;
     private final GameStatsRepository gameStatsRepository;
     private final PlayByPlayRepository playByPlayRepository;
+    private final DraftPickRepository draftPickRepository;
+    private final OfficialRepository officialRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -442,6 +448,103 @@ public class NflverseImportService {
             }
 
             System.out.println("Imported PlayByPlay: " + imported + " | without corresponding game: " + skippedNoGame);
+        }
+    }
+
+    public void importDraftPicks() throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/draft_picks/draft_picks.csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String seasonStr = getOrNull(row, col, "season");
+                String roundStr = getOrNull(row, col, "round");
+                String pickStr = getOrNull(row, col, "pick");
+                if (seasonStr == null || roundStr == null || pickStr == null) continue;
+
+                Integer season = parseIntSafe(seasonStr);
+                Integer round = parseIntSafe(roundStr);
+                Integer pick = parseIntSafe(pickStr);
+
+                if (draftPickRepository.existsBySeasonAndRoundAndPick(season, round, pick)) continue;
+
+                DraftPick dp = new DraftPick();
+                dp.setSeason(season);
+                dp.setRound(round);
+                dp.setPick(pick);
+
+                String teamAbbr = getOrNull(row, col, "team");
+                if (teamAbbr != null) {
+                    dp.setTeam(teamRepository.findByAbbreviation(teamAbbr));
+                }
+
+                String gsisId = getOrNull(row, col, "gsis_id");
+                if (gsisId != null) {
+                    dp.setPlayer(playerRepository.findByExternalId(gsisId));
+                }
+
+                dp.setPlayerName(getOrNull(row, col, "pfr_player_name"));
+                dp.setPosition(getOrNull(row, col, "position"));
+                dp.setCollege(getOrNull(row, col, "college"));
+
+                draftPickRepository.save(dp);
+                imported++;
+            }
+
+            System.out.println("Draft picks imported: " + imported);
+        }
+    }
+
+    public void importOfficials(int season) throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/officials/officials.csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int skippedNoGame = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String seasonStr = getOrNull(row, col, "season");
+                if (seasonStr == null || !seasonStr.equals(String.valueOf(season))) continue;
+
+                String homeTeam = getOrNull(row, col, "home_team");
+                String awayTeam = getOrNull(row, col, "away_team");
+                String weekStr = getOrNull(row, col, "week");
+                if (homeTeam == null || awayTeam == null || weekStr == null) continue;
+
+                Integer week = parseIntSafe(weekStr);
+                Game game = gameRepository.findGameByTeams(season, week, homeTeam, awayTeam);
+                if (game == null) {
+                    skippedNoGame++;
+                    continue;
+                }
+
+                String name = getOrNull(row, col, "official_name");
+                String role = getOrNull(row, col, "official_position");
+                if (name == null) continue;
+
+                if (officialRepository.existsByGame_IdAndNameAndRole(game.getId(), name, role)) continue;
+
+                Official official = new Official();
+                official.setGame(game);
+                official.setName(name);
+                official.setRole(role);
+
+                officialRepository.save(official);
+                imported++;
+            }
+
+            System.out.println("Officials imported: " + imported + " | without corresponding game: " + skippedNoGame);
         }
     }
 
