@@ -24,4 +24,10 @@ public interface GameRepository extends JpaRepository<Game, Long> {
        "AND ((g.homeTeam.abbreviation = :team1 AND g.awayTeam.abbreviation = :team2) " +
        "OR (g.homeTeam.abbreviation = :team2 AND g.awayTeam.abbreviation = :team1))")
     Game findGameByTeams(@Param("season") Integer season, @Param("week") Integer week, @Param("team1") String team1, @Param("team2") String team2);
+
+
+    //used to connect Injurie a Game
+    @Query("SELECT g FROM Game g WHERE g.season = :season AND g.week = :week " +
+       "AND (g.homeTeam.abbreviation = :team OR g.awayTeam.abbreviation = :team)")
+    Game findGameByTeamAndWeek(@Param("season") Integer season, @Param("week") Integer week, @Param("team") String team);
 }

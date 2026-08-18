@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import nflanalytics.model.DraftPick;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
+import nflanalytics.model.Injury;
 import nflanalytics.model.Official;
 import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.Player;
@@ -28,6 +29,7 @@ import nflanalytics.model.Team;
 import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
+import nflanalytics.repository.InjuryRepository;
 import nflanalytics.repository.OfficialRepository;
 import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerRepository;
@@ -48,6 +50,7 @@ public class NflverseImportService {
     private final PlayByPlayRepository playByPlayRepository;
     private final DraftPickRepository draftPickRepository;
     private final OfficialRepository officialRepository;
+    private final InjuryRepository injuryRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -545,6 +548,56 @@ public class NflverseImportService {
             }
 
             System.out.println("Officials imported: " + imported + " | without corresponding game: " + skippedNoGame);
+        }
+    }
+
+    public void importInjuries(int season) throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/injuries/injuries_" + season + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int skippedNoGame = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String weekStr = getOrNull(row, col, "week");
+                String team = getOrNull(row, col, "team");
+                String gsisId = getOrNull(row, col, "gsis_id");
+                if (weekStr == null || team == null) continue;
+
+                Integer week = parseIntSafe(weekStr);
+
+                Player player = (gsisId != null) ? playerRepository.findByExternalId(gsisId) : null;
+
+            
+                if (player != null && injuryRepository.existsByPlayer_IdAndSeasonAndWeek(player.getId(), season, week)) {
+                    continue;
+                }
+
+                Game game = gameRepository.findGameByTeamAndWeek(season, week, team);
+                if (game == null) skippedNoGame++;
+
+                Injury injury = new Injury();
+                injury.setPlayer(player);
+                injury.setGame(game); //null if not found
+                injury.setSeason(season);
+                injury.setWeek(week);
+                injury.setTeam(team);
+                injury.setReportPrimaryInjury(getOrNull(row, col, "report_primary_injury"));
+                injury.setReportSecondaryInjury(getOrNull(row, col, "report_secondary_injury"));
+                injury.setReportStatus(getOrNull(row, col, "report_status"));
+                injury.setPracticePrimaryInjury(getOrNull(row, col, "practice_primary_injury"));
+                injury.setPracticeStatus(getOrNull(row, col, "practice_status"));
+
+                injuryRepository.save(injury);
+                imported++;
+            }
+
+            System.out.println("Injuries imported: " + imported + " | without corresponding game: " + skippedNoGame);
         }
     }
 
