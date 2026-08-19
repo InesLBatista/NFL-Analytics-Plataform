@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import com.opencsv.CSVReader;
 import lombok.RequiredArgsConstructor;
+import nflanalytics.model.Contract;
 import nflanalytics.model.DraftPick;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
@@ -27,6 +28,7 @@ import nflanalytics.model.Player;
 import nflanalytics.model.PlayerStats;
 import nflanalytics.model.SnapCount;
 import nflanalytics.model.Team;
+import nflanalytics.repository.ContractRepository;
 import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
@@ -54,6 +56,7 @@ public class NflverseImportService {
     private final OfficialRepository officialRepository;
     private final InjuryRepository injuryRepository;
     private final SnapCountRepository snapCountRepository;
+    private final ContractRepository contractRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -668,6 +671,61 @@ public class NflverseImportService {
         }
     }
 
+    public void importContracts() throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/contracts/contracts.csv.gz";
+
+        try (CSVReader reader = openGzippedCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlayer = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String playerName = getOrNull(row, col, "player");
+                String yearSignedStr = getOrNull(row, col, "year_signed");
+                if (playerName == null || yearSignedStr == null) continue;
+
+                Integer yearSigned = parseIntSafe(yearSignedStr);
+
+
+                if (contractRepository.existsByPlayerNameAndYearSigned(playerName, yearSigned)) continue;
+
+                Contract contract = new Contract();
+                contract.setPlayerName(playerName);
+                contract.setYearSigned(yearSigned);
+                contract.setPosition(getOrNull(row, col, "position"));
+                contract.setTeam(getOrNull(row, col, "team"));
+
+                String isActiveStr = getOrNull(row, col, "is_active");
+                contract.setIsActive(isActiveStr != null && isActiveStr.equalsIgnoreCase("TRUE"));
+
+                contract.setYears(parseIntSafe(getOrNull(row, col, "years")));
+                contract.setTotalValue(parseDoubleSafe(getOrNull(row, col, "value")));
+                contract.setApy(parseDoubleSafe(getOrNull(row, col, "apy")));
+                contract.setGuaranteedMoney(parseDoubleSafe(getOrNull(row, col, "guaranteed")));
+                contract.setApyCapPct(parseDoubleSafe(getOrNull(row, col, "apy_cap_pct")));
+                contract.setOtcId(parseIntSafe(getOrNull(row, col, "otc_id")));
+
+                String gsisId = getOrNull(row, col, "gsis_id");
+                if (gsisId != null) {
+                    Player player = playerRepository.findByExternalId(gsisId);
+                    if (player != null) {
+                        contract.setPlayer(player);
+                        linkedToPlayer++;
+                    }
+                }
+
+                contractRepository.save(contract);
+                imported++;
+            }
+
+            System.out.println("Imported contracts: " + imported + " | connected to Player: " + linkedToPlayer);
+        }
+    }
+
     //chave para o lookup em memória de jogos 
     private String buildGameKey(Integer week, String team1, String team2) {
         String[] teams = { team1, team2 };
@@ -741,5 +799,44 @@ public class NflverseImportService {
     private Integer parseIntSafe(String value) {
         if (value == null || value.isBlank()) return null;
         try { return (int) Double.parseDouble(value); } catch (NumberFormatException e) { return null; }
+    }
+
+
+
+
+    //similar to openCsvFromUrl, but decompresses the .gz file before reading it, for contracts
+    private CSVReader openGzippedCsvFromUrl(String urlString) throws Exception {
+        //create a URL object from the provided string
+        java.net.URL url = new java.net.URL(urlString);
+        //open an HTTP connection to the URL
+        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+        //set the request method to GET
+        connection.setRequestMethod("GET");
+        //automatically follow redirects (HTTP 3xx status codes)
+        connection.setInstanceFollowRedirects(true);
+
+        int status = connection.getResponseCode();
+        System.out.println("HTTP response: " + status);  // Print the response status
+
+        if (status == 302 || status == 301) {
+            //get the redirect location from the "Location" header
+            String redirectUrl = connection.getHeaderField("Location");
+            System.out.println("Redirected to: " + redirectUrl);  // Print the redirect URL
+        
+            //recursively follow the redirect
+            return openGzippedCsvFromUrl(redirectUrl);
+        }
+
+
+        if (status != 200) {
+            throw new RuntimeException("Failed to fetch CSV.GZ from " + urlString + " — HTTP " + status);
+        }
+
+        //GZIPInputStream decompresses the file transparently as it's being read. this wraps the connection's input stream to handle gzip decompression
+        java.util.zip.GZIPInputStream gzipStream = new java.util.zip.GZIPInputStream(connection.getInputStream());
+    
+        //create and return a CSVReader that reads from the decompressed stream
+        //the InputStreamReader converts bytes to characters using the default charset
+        return new CSVReader(new InputStreamReader(gzipStream));
     }
 }
