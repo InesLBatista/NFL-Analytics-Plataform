@@ -766,9 +766,7 @@ public class NflverseImportService {
 
             if (status == HttpURLConnection.HTTP_OK) {
                 return new CSVReader(new InputStreamReader(connection.getInputStream()));
-            } else if (status == HttpURLConnection.HTTP_MOVED_TEMP
-                    || status == HttpURLConnection.HTTP_MOVED_PERM
-                    || status == 307 || status == 308) {
+            } else if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308) {
                 currentUrl = connection.getHeaderField("Location");
                 log.info("Redirected to: {}", currentUrl);
                 connection.disconnect();

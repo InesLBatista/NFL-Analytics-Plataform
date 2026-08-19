@@ -115,4 +115,15 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import snap counts: " + e.getMessage());
         }
     }
+
+    @PostMapping("/contracts")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importContracts() {
+        try {
+            importService.importContracts();
+            return ResponseEntity.ok("Contracts imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import contracts: " + e.getMessage());
+        }
+    }
 }
