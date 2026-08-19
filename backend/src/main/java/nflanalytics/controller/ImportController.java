@@ -104,4 +104,15 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import injuries: " + e.getMessage());
         }
     }
+
+    @PostMapping("/snap-counts/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importSnapCounts(@PathVariable int season) {
+        try {
+            importService.importSnapCounts(season);
+            return ResponseEntity.ok("Snap counts imported for season " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import snap counts: " + e.getMessage());
+        }
+    }
 }

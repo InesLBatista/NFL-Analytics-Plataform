@@ -25,6 +25,7 @@ import nflanalytics.model.Official;
 import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.Player;
 import nflanalytics.model.PlayerStats;
+import nflanalytics.model.SnapCount;
 import nflanalytics.model.Team;
 import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
@@ -34,6 +35,7 @@ import nflanalytics.repository.OfficialRepository;
 import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerRepository;
 import nflanalytics.repository.PlayerStatsRepository;
+import nflanalytics.repository.SnapCountRepository;
 import nflanalytics.repository.TeamRepository;
 
 @Service
@@ -51,6 +53,7 @@ public class NflverseImportService {
     private final DraftPickRepository draftPickRepository;
     private final OfficialRepository officialRepository;
     private final InjuryRepository injuryRepository;
+    private final SnapCountRepository snapCountRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -598,6 +601,70 @@ public class NflverseImportService {
             }
 
             System.out.println("Injuries imported: " + imported + " | without corresponding game: " + skippedNoGame);
+        }
+    }
+
+
+
+
+    public void importSnapCounts(int season) throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_" + season + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlayer = 0;
+            int linkedToGame = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String playerName = getOrNull(row, col, "player");
+                String team = getOrNull(row, col, "team");
+                String weekStr = getOrNull(row, col, "week");
+                if (playerName == null || team == null || weekStr == null) continue;
+
+                Integer week = parseIntSafe(weekStr);
+
+                if (snapCountRepository.existsByPlayerNameAndTeamAndSeasonAndWeek(playerName, team, season, week)) {
+                    continue;
+                }
+
+                SnapCount sc = new SnapCount();
+                sc.setPlayerName(playerName);
+                sc.setTeam(team);
+                sc.setSeason(season);
+                sc.setWeek(week);
+                sc.setPosition(getOrNull(row, col, "position"));
+
+            
+
+                Player player = playerRepository.findByFullNameIgnoreCaseAndTeam_Abbreviation(playerName, team);
+                if (player != null) {
+                    sc.setPlayer(player);
+                    linkedToPlayer++;
+                }
+
+                Game game = gameRepository.findGameByTeamAndWeek(season, week, team);
+                if (game != null) {
+                    sc.setGame(game);
+                    linkedToGame++;
+                }
+
+                sc.setOffenseSnaps(parseIntSafe(getOrNull(row, col, "offense_snaps")));
+                sc.setOffensePct(parseDoubleSafe(getOrNull(row, col, "offense_pct")));
+                sc.setDefenseSnaps(parseIntSafe(getOrNull(row, col, "defense_snaps")));
+                sc.setDefensePct(parseDoubleSafe(getOrNull(row, col, "defense_pct")));
+                sc.setSpecialTeamsSnaps(parseIntSafe(getOrNull(row, col, "st_snaps")));
+                sc.setSpecialTeamsPct(parseDoubleSafe(getOrNull(row, col, "st_pct")));
+
+                snapCountRepository.save(sc);
+                imported++;
+            }
+
+            System.out.println("SnapCounts imported: " + imported + " | connected to Player: " + linkedToPlayer + " | connected to Game: " + linkedToGame);
         }
     }
 
