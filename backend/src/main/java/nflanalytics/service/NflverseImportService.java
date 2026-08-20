@@ -22,6 +22,7 @@ import nflanalytics.model.DraftPick;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
 import nflanalytics.model.Injury;
+import nflanalytics.model.NextGenStat;
 import nflanalytics.model.Official;
 import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.Player;
@@ -33,6 +34,7 @@ import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
 import nflanalytics.repository.InjuryRepository;
+import nflanalytics.repository.NextGenStatRepository;
 import nflanalytics.repository.OfficialRepository;
 import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerRepository;
@@ -57,6 +59,7 @@ public class NflverseImportService {
     private final InjuryRepository injuryRepository;
     private final SnapCountRepository snapCountRepository;
     private final ContractRepository contractRepository;
+    private final NextGenStatRepository nextGenStatRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -723,6 +726,90 @@ public class NflverseImportService {
             }
 
             System.out.println("Imported contracts: " + imported + " | connected to Player: " + linkedToPlayer);
+        }
+    }
+
+
+    public void importNextGenStats(String statType) throws Exception {
+        //statType
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/nextgen_stats/ngs_" + statType + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns (" + statType + "): " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlayer = 0;
+            int linkedToGame = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String seasonStr = getOrNull(row, col, "season");
+                String weekStr = getOrNull(row, col, "week");
+                String gsisId = getOrNull(row, col, "player_gsis_id");
+                if (seasonStr == null || weekStr == null) continue;
+
+                Integer season = parseIntSafe(seasonStr);
+                Integer week = parseIntSafe(weekStr);
+
+                //week == 0 its rewind of the whole season
+                if (week == null || week == 0) continue;
+
+                Player player = (gsisId != null) ? playerRepository.findByExternalId(gsisId) : null;
+
+                if (player != null && nextGenStatRepository.existsByPlayer_IdAndSeasonAndWeekAndStatType(
+                    player.getId(), season, week, statType)) {
+                    continue;
+                }
+
+                NextGenStat stat = new NextGenStat();
+                stat.setStatType(statType);
+                stat.setSeason(season);
+                stat.setWeek(week);
+                stat.setTeam(getOrNull(row, col, "team_abbr"));
+
+                if (player != null) {
+                    stat.setPlayer(player);
+                    linkedToPlayer++;
+                }
+
+                if (stat.getTeam() != null) {
+                    Game game = gameRepository.findGameByTeamAndWeek(season, week, stat.getTeam());
+                    if (game != null) {
+                        stat.setGame(game);
+                        linkedToGame++;
+                    }
+                }
+
+                if (statType.equals("passing")) {
+                    stat.setAvgTimeToThrow(parseDoubleSafe(getOrNull(row, col, "avg_time_to_throw")));
+                    stat.setAvgCompletedAirYards(parseDoubleSafe(getOrNull(row, col, "avg_completed_air_yards")));
+                    stat.setAvgIntendedAirYards(parseDoubleSafe(getOrNull(row, col, "avg_intended_air_yards")));
+                    stat.setAvgAirYardsDifferential(parseDoubleSafe(getOrNull(row, col, "avg_air_yards_differential")));
+                    stat.setAggressiveness(parseDoubleSafe(getOrNull(row, col, "aggressiveness")));
+                    stat.setMaxCompletedAirDistance(parseDoubleSafe(getOrNull(row, col, "max_completed_air_distance")));
+                    stat.setCompletionPctAboveExpectation(parseDoubleSafe(getOrNull(row, col, "completion_percentage_above_expectation")));
+                } else if (statType.equals("rushing")) {
+                    stat.setRushYardsOverExpected(parseDoubleSafe(getOrNull(row, col, "rush_yards_over_expected")));
+                    stat.setRushYardsOverExpectedPerAtt(parseDoubleSafe(getOrNull(row, col, "rush_yards_over_expected_per_att")));
+                    stat.setRushPctOverExpected(parseDoubleSafe(getOrNull(row, col, "rush_pct_over_expected")));
+                    stat.setEfficiency(parseDoubleSafe(getOrNull(row, col, "efficiency")));
+                    stat.setAvgTimeToLos(parseDoubleSafe(getOrNull(row, col, "avg_time_to_los")));
+                } else if (statType.equals("receiving")) {
+                    stat.setAvgCushion(parseDoubleSafe(getOrNull(row, col, "avg_cushion")));
+                    stat.setAvgSeparation(parseDoubleSafe(getOrNull(row, col, "avg_separation")));
+                    stat.setAvgYac(parseDoubleSafe(getOrNull(row, col, "avg_yac")));
+                    stat.setAvgExpectedYac(parseDoubleSafe(getOrNull(row, col, "avg_expected_yac")));
+                    stat.setAvgYacAboveExpectation(parseDoubleSafe(getOrNull(row, col, "avg_yac_above_expectation")));
+                    stat.setCatchPct(parseDoubleSafe(getOrNull(row, col, "catch_percentage")));
+                }
+
+                nextGenStatRepository.save(stat);
+                imported++;
+            }
+
+            System.out.println("NextGenStats (" + statType + ") imported: " + imported + " | connected to Player: " + linkedToPlayer + " | connected to Game: " + linkedToGame);
         }
     }
 

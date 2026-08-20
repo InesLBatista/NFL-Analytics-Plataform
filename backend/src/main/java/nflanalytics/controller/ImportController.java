@@ -126,4 +126,38 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import contracts: " + e.getMessage());
         }
     }
+
+    // ngs is split into 3 separate endpoints matching the 3 csv files on nflverse (passing, rushing, receiving)
+    @PostMapping("/next-gen-stats/passing")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importNextGenStatsPassing() {
+        try {
+            importService.importNextGenStats("passing");
+            return ResponseEntity.ok("Next gen stats (passing) imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import next gen stats (passing): " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/next-gen-stats/rushing")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importNextGenStatsRushing() {
+        try {
+            importService.importNextGenStats("rushing");
+            return ResponseEntity.ok("Next gen stats (rushing) imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import next gen stats (rushing): " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/next-gen-stats/receiving")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importNextGenStatsReceiving() {
+        try {
+            importService.importNextGenStats("receiving");
+            return ResponseEntity.ok("Next gen stats (receiving) imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import next gen stats (receiving): " + e.getMessage());
+        }
+    }
 }
