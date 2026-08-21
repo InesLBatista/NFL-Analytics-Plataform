@@ -12,4 +12,6 @@ public interface DepthChartRepository extends JpaRepository<DepthChartEntry, Lon
     List<DepthChartEntry> findByTeamAndSeasonAndWeek(String team, Integer season, Integer week);
 
     DepthChartEntry findByTeamAndSeasonAndWeekAndPositionAndDepthRank(String team, Integer season, Integer week, String position, Integer depthRank);
+
+    List<DepthChartEntry> findByGame_Id(Long gameId);
 }

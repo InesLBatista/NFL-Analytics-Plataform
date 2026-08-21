@@ -11,18 +11,26 @@ import nflanalytics.dto.WeekReportResult;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
+import nflanalytics.model.DepthChartEntry;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameReport;
 import nflanalytics.model.GameStats;
 import nflanalytics.model.Injury;
+import nflanalytics.model.NextGenStat;
+import nflanalytics.model.Official;
 import nflanalytics.model.PlayByPlay;
 import nflanalytics.model.PlayerStats;
+import nflanalytics.model.SnapCount;
+import nflanalytics.repository.DepthChartRepository;
 import nflanalytics.repository.GameReportRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
 import nflanalytics.repository.InjuryRepository;
+import nflanalytics.repository.NextGenStatRepository;
+import nflanalytics.repository.OfficialRepository;
 import nflanalytics.repository.PlayByPlayRepository;
 import nflanalytics.repository.PlayerStatsRepository;
+import nflanalytics.repository.SnapCountRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +41,10 @@ public class GameReportService {
     private final PlayerStatsRepository playerStatsRepository;
     private final PlayByPlayRepository playByPlayRepository;
     private final InjuryRepository injuryRepository;
+    private final OfficialRepository officialRepository;
+    private final SnapCountRepository snapCountRepository;
+    private final NextGenStatRepository nextGenStatRepository;
+    private final DepthChartRepository depthChartRepository;
     private final GameReportRepository gameReportRepository;
     private final AnthropicClient anthropicClient;
 
@@ -120,11 +132,10 @@ public class GameReportService {
           .append("in a professional yet engaging tone, as if published on a sports website. ")
           .append("Use only the data provided below -- do not invent any statistics.\n\n");
 
-        // Score and basic context
-        sb.append("GAME: ").append(game.getAwayTeam().getName())
+        sb.append("Game: ").append(game.getAwayTeam().getName())
           .append(" @ ").append(game.getHomeTeam().getName())
           .append(" (Week ").append(game.getWeek()).append(", Season ").append(game.getSeason()).append(")\n");
-        sb.append("FINAL SCORE: ").append(game.getAwayTeam().getAbbreviation()).append(" ")
+        sb.append("Final score: ").append(game.getAwayTeam().getAbbreviation()).append(" ")
           .append(game.getAwayScore()).append(" - ")
           .append(game.getHomeScore()).append(" ").append(game.getHomeTeam().getAbbreviation()).append("\n");
 
@@ -143,10 +154,20 @@ public class GameReportService {
               .append(" (").append(game.getHomeTeam().getAbbreviation()).append(")\n");
         }
 
+        //match officials
+        List<Official> officials = officialRepository.findByGame_Id(game.getId());
+        if (!officials.isEmpty()) {
+            sb.append("Match officials: ");
+            sb.append(officials.stream()
+                    .map(o -> o.getName() + " (" + o.getRole() + ")")
+                    .collect(Collectors.joining(", ")));
+            sb.append("\n");
+        }
+
         // Team statistics
         List<GameStats> teamStats = gameStatsRepository.findByGame_Id(game.getId());
         if (!teamStats.isEmpty()) {
-            sb.append("\nTEAM STATISTICS:\n");
+            sb.append("\nTeam statistics:\n");
             for (GameStats gs : teamStats) {
                 sb.append("- ").append(gs.getTeam().getAbbreviation()).append(": ");
                 if (gs.getTotalYards() != null)
@@ -174,7 +195,7 @@ public class GameReportService {
                 .collect(Collectors.toList());
 
         if (!topPlayers.isEmpty()) {
-            sb.append("\nTOP PLAYERS OF THE GAME:\n");
+            sb.append("\nTop players of the game:\n");
             for (PlayerStats ps : topPlayers) {
                 sb.append("- ").append(ps.getPlayer().getFullName())
                   .append(" (").append(ps.getPlayer().getPosition()).append("): ");
@@ -197,6 +218,13 @@ public class GameReportService {
                 if (ps.getSacks() != null && ps.getSacks() > 0) {
                     sb.append(ps.getSacks()).append(" sacks. ");
                 }
+
+                //usage context from snap counts, when available for this player
+                SnapCount snaps = findSnapCount(game, ps.getPlayer().getId());
+                if (snaps != null && snaps.getOffensePct() != null) {
+                    sb.append("Played ").append(String.format("%.0f", snaps.getOffensePct())).append("% of offensive snaps. ");
+                }
+
                 sb.append("\n");
             }
         }
@@ -210,7 +238,7 @@ public class GameReportService {
                 .collect(Collectors.toList());
 
         if (!keyPlays.isEmpty()) {
-            sb.append("\nMOST DECISIVE PLAYS (by EPA impact):\n");
+            sb.append("\nMost decisive plays (by EPA impact):\n");
             for (PlayByPlay p : keyPlays) {
                 sb.append("- Q").append(p.getQuarter() != null ? p.getQuarter() : "?");
                 if (p.getGameSecondsRemaining() != null) {
@@ -222,17 +250,44 @@ public class GameReportService {
             }
         }
 
-        
-        
-        
+        //advanced metrics for the top players identified above
+        if (!topPlayers.isEmpty()) {
+            StringBuilder ngsSection = new StringBuilder();
+            for (PlayerStats ps : topPlayers) {
+                NextGenStat ngs = findNextGenStat(game, ps.getPlayer().getId());
+                if (ngs == null) continue;
+
+                ngsSection.append("- ").append(ps.getPlayer().getFullName()).append(" (").append(ngs.getStatType()).append("): ");
+
+                if ("passing".equals(ngs.getStatType())) {
+                    if (ngs.getAvgTimeToThrow() != null) ngsSection.append("avg time to throw ").append(ngs.getAvgTimeToThrow()).append("s, ");
+                    if (ngs.getCompletionPctAboveExpectation() != null) ngsSection.append("completion % above expectation ").append(ngs.getCompletionPctAboveExpectation()).append(", ");
+                    if (ngs.getAggressiveness() != null) ngsSection.append("aggressiveness ").append(ngs.getAggressiveness()).append("%. ");
+                } else if ("rushing".equals(ngs.getStatType())) {
+                    if (ngs.getRushYardsOverExpected() != null) ngsSection.append("rush yards over expected ").append(ngs.getRushYardsOverExpected()).append(", ");
+                    if (ngs.getEfficiency() != null) ngsSection.append("efficiency ").append(ngs.getEfficiency()).append(". ");
+                } else if ("receiving".equals(ngs.getStatType())) {
+                    if (ngs.getAvgSeparation() != null) ngsSection.append("avg separation ").append(ngs.getAvgSeparation()).append(" yds, ");
+                    if (ngs.getAvgYacAboveExpectation() != null) ngsSection.append("YAC above expectation ").append(ngs.getAvgYacAboveExpectation()).append(". ");
+                }
+
+                ngsSection.append("\n");
+            }
+
+            if (ngsSection.length() > 0) {
+                sb.append("\nAdvanced metrics (Next Gen Stats):\n").append(ngsSection);
+            }
+        }
+
+        //injuries, cross-referenced with who actually played and who likely replaced them
         List<Injury> injuries = injuryRepository.findByGame_Id(game.getId());
         if (!injuries.isEmpty()) {
-            // jogadores confirmados fora do jogo
+            //players confirmed out of the game
             List<Injury> out = injuries.stream()
                     .filter(i -> "Out".equalsIgnoreCase(i.getReportStatus()))
                     .collect(Collectors.toList());
 
-            // jogadores com estatuto incerto ou limitado
+            //players with uncertain or limited status
             List<Injury> limited = injuries.stream()
                     .filter(i -> i.getReportStatus() != null
                             && !i.getReportStatus().equalsIgnoreCase("Out")
@@ -240,7 +295,7 @@ public class GameReportService {
                     .collect(Collectors.toList());
 
             if (!out.isEmpty()) {
-                sb.append("\nPLAYERS RULED OUT:\n");
+                sb.append("\nPlayers ruled out:\n");
                 for (Injury i : out) {
                     sb.append("- ");
                     if (i.getPlayer() != null) sb.append(i.getPlayer().getFullName());
@@ -250,12 +305,20 @@ public class GameReportService {
                         sb.append(" — ").append(i.getReportPrimaryInjury());
                     if (i.getReportSecondaryInjury() != null)
                         sb.append(", ").append(i.getReportSecondaryInjury());
+
+                    //tries to identify the likely replacement via the depth chart
+                    if (i.getPlayer() != null) {
+                        DepthChartEntry replacement = findLikelyReplacement(game, i.getTeam(), i.getPlayer());
+                        if (replacement != null && replacement.getPlayer() != null) {
+                            sb.append(" -- likely replaced by ").append(replacement.getPlayer().getFullName());
+                        }
+                    }
                     sb.append("\n");
                 }
             }
 
             if (!limited.isEmpty()) {
-                sb.append("\nINJURED BUT LISTED (Questionable/Doubtful/Limited):\n");
+                sb.append("\nInjured but listed (questionable/doubtful/limited):\n");
                 for (Injury i : limited) {
                     sb.append("- ");
                     if (i.getPlayer() != null) sb.append(i.getPlayer().getFullName());
@@ -273,6 +336,36 @@ public class GameReportService {
 
         sb.append("\nWrite the recap now:");
         return sb.toString();
+    }
+
+    //finds this player's snap count entry for this specific game, if imported
+    private SnapCount findSnapCount(Game game, Long playerId) {
+        return snapCountRepository.findByGame_Id(game.getId()).stream()
+                .filter(sc -> sc.getPlayer() != null && sc.getPlayer().getId().equals(playerId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    //finds this player's Next Gen Stats entry for this specific game, if imported
+    private NextGenStat findNextGenStat(Game game, Long playerId) {
+        return nextGenStatRepository.findByGame_Id(game.getId()).stream()
+                .filter(ngs -> ngs.getPlayer() != null && ngs.getPlayer().getId().equals(playerId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    //finds who most likely took over an injured player's snaps, using the depth chart:
+    //if the injured player was the starter (depthRank=1), the replacement is depthRank=2, otherwise, the current starter at that position is assumed to have played instead
+    private DepthChartEntry findLikelyReplacement(Game game, String team, nflanalytics.model.Player injuredPlayer) {
+        DepthChartEntry starter = depthChartRepository.findByTeamAndSeasonAndWeekAndPositionAndDepthRank(
+                team, game.getSeason(), game.getWeek(), injuredPlayer.getPosition(), 1);
+
+        if (starter != null && starter.getPlayer() != null && !starter.getPlayer().getId().equals(injuredPlayer.getId())) {
+            return starter;
+        }
+
+        return depthChartRepository.findByTeamAndSeasonAndWeekAndPositionAndDepthRank(
+                team, game.getSeason(), game.getWeek(), injuredPlayer.getPosition(), 2);
     }
 
     //calculates total yards for a player across all categories
