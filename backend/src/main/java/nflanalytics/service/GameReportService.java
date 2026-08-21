@@ -1,9 +1,12 @@
 package nflanalytics.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import nflanalytics.dto.WeekReportResult;
 
 import org.springframework.stereotype.Service;
 
@@ -36,6 +39,55 @@ public class GameReportService {
     //retrieves an existing report for a specific game
     public GameReport getReport(Long gameId) {
         return gameReportRepository.findByGame_Id(gameId);
+    }
+
+
+
+    //processes each game independently so a single API failure does not abort the rest
+    //a delay between calls avoids hitting Anthropic rate limits
+    public WeekReportResult generateWeekReports(int season, int week) {
+        List<Game> games = gameRepository.findBySeasonAndWeek(season, week);
+
+        int generated = 0;
+        int failed    = 0;
+        int skipped   = 0;
+        List<String> errors = new ArrayList<>();
+
+        for (Game game : games) {
+            //skip games that already have a report to avoid unnecessary API calls
+            if (gameReportRepository.findByGame_Id(game.getId()) != null) {
+                skipped++;
+                continue;
+            }
+
+            try {
+                String prompt = buildPrompt(game);
+                String generatedText = anthropicClient.generateText(prompt);
+
+                GameReport report = new GameReport();
+                report.setGame(game);
+                report.setContent(generatedText);
+                report.setGeneratedAt(LocalDateTime.now());
+                gameReportRepository.save(report);
+                generated++;
+
+                //small delay between calls to stay within API rate limits
+                Thread.sleep(1_500);
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                errors.add("Interrupted while processing game " + game.getId());
+                break;
+            } catch (Exception e) {
+                //log the failure but continue with the next game
+                failed++;
+                errors.add(game.getHomeTeam().getAbbreviation() + " vs "
+                        + game.getAwayTeam().getAbbreviation()
+                        + " (id=" + game.getId() + "): " + e.getMessage());
+            }
+        }
+
+        return new WeekReportResult(season, week, generated, failed, skipped, errors);
     }
 
     //generates the report of a specific game, aggregates data and builds the prompt
