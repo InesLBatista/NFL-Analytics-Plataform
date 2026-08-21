@@ -12,7 +12,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
+import nflanalytics.model.DepthChartEntry;
 import nflanalytics.model.Injury;
+import nflanalytics.repository.DepthChartRepository;
 import nflanalytics.repository.InjuryRepository;
 import nflanalytics.repository.PlayerStatsRepository;
 
@@ -21,6 +23,7 @@ import nflanalytics.repository.PlayerStatsRepository;
 public class PlayerAvailabilityService {
     private final InjuryRepository injuryRepository;
     private final PlayerStatsRepository playerStatsRepository;
+    private final DepthChartRepository depthChartRepository;
 
     //number of games missed on a season cause of injury
     public int countGamesMissedDueToInjury(Long playerId, Integer season) {
@@ -63,4 +66,17 @@ public class PlayerAvailabilityService {
 
 
     public record InjuryAvailability(Injury injury, boolean actuallyPlayed) {}
+
+
+    public DepthChartEntry findLikelyReplacement(String team, Integer season, Integer week, String position, Long injuredPlayerId) {
+        DepthChartEntry starter = depthChartRepository.findByTeamAndSeasonAndWeekAndPositionAndDepthRank( team, season, week, position, 1);
+
+        //if starter is not injuried player, he played the game (substition not needed)
+        if (starter != null && starter.getPlayer() != null && !starter.getPlayer().getId().equals(injuredPlayerId)) {
+                return starter;
+        }
+
+        //otherwise injuried player is the starter
+        return depthChartRepository.findByTeamAndSeasonAndWeekAndPositionAndDepthRank(team, season, week, position, 2);
+        }
 }

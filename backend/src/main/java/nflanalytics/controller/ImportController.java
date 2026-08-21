@@ -160,4 +160,15 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import next gen stats (receiving): " + e.getMessage());
         }
     }
+
+    @PostMapping("/depth-charts/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importDepthCharts(@PathVariable int season) {
+        try {
+            importService.importDepthCharts(season);
+            return ResponseEntity.ok("Depth charts imported for season " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import depth charts: " + e.getMessage());
+        }
+    }
 }

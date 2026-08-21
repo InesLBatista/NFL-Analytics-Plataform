@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import com.opencsv.CSVReader;
 import lombok.RequiredArgsConstructor;
 import nflanalytics.model.Contract;
+import nflanalytics.model.DepthChartEntry;
 import nflanalytics.model.DraftPick;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
@@ -30,6 +31,7 @@ import nflanalytics.model.PlayerStats;
 import nflanalytics.model.SnapCount;
 import nflanalytics.model.Team;
 import nflanalytics.repository.ContractRepository;
+import nflanalytics.repository.DepthChartRepository;
 import nflanalytics.repository.DraftPickRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
@@ -60,6 +62,7 @@ public class NflverseImportService {
     private final SnapCountRepository snapCountRepository;
     private final ContractRepository contractRepository;
     private final NextGenStatRepository nextGenStatRepository;
+    private final DepthChartRepository depthChartRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -811,6 +814,76 @@ public class NflverseImportService {
 
             System.out.println("NextGenStats (" + statType + ") imported: " + imported + " | connected to Player: " + linkedToPlayer + " | connected to Game: " + linkedToGame);
         }
+    }
+
+
+
+    public void importDepthCharts(int season) throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_" + season + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlayer = 0;
+            int linkedToGame = 0;
+
+            while ((row = reader.readNext()) != null) {
+                //tries old sheme(until 2024), falls into new one if not found (+2025)
+                String playerName = coalesce(getOrNull(row, col, "full_name"), getOrNull(row, col, "player_name"));
+                String depthRankStr = coalesce(getOrNull(row, col, "depth_team"), getOrNull(row, col, "pos_rank"));
+                String position = coalesce(getOrNull(row, col, "depth_chart_position"), getOrNull(row, col, "pos_abb"));
+                String team = getOrNull(row, col, "team");
+                String weekStr = getOrNull(row, col, "week");
+                String gsisId = getOrNull(row, col, "gsis_id");
+
+                if (playerName == null || team == null) continue;
+
+                //sheme 2025+ doesn't have "week" (uses date, not week)
+                Integer week = (weekStr != null) ? parseIntSafe(weekStr) : null;
+                if (week == null) continue;
+
+                if (depthChartRepository.existsByPlayerNameAndTeamAndSeasonAndWeekAndPosition(
+                        playerName, team, season, week, position)) {
+                    continue;
+                }
+
+                DepthChartEntry entry = new DepthChartEntry();
+                entry.setPlayerName(playerName);
+                entry.setTeam(team);
+                entry.setSeason(season);
+                entry.setWeek(week);
+                entry.setPosition(position);
+                entry.setDepthPosition(position);
+                entry.setDepthRank(parseIntSafe(depthRankStr));
+
+                if (gsisId != null) {
+                    Player player = playerRepository.findByExternalId(gsisId);
+                    if (player != null) {
+                        entry.setPlayer(player);
+                        linkedToPlayer++;
+                    }
+                }
+
+                Game game = gameRepository.findGameByTeamAndWeek(season, week, team);
+                if (game != null) {
+                    entry.setGame(game);
+                    linkedToGame++;
+                }
+
+                depthChartRepository.save(entry);
+                imported++;
+            }
+
+            System.out.println("DepthChart imported: " + imported + " | connected to Player: " + linkedToPlayer + " | connected to Game: " + linkedToGame);
+        }
+    }
+
+    private String coalesce(String a, String b) {
+        return (a != null) ? a : b;
     }
 
     //chave para o lookup em memória de jogos 
