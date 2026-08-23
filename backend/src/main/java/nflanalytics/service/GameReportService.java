@@ -128,7 +128,7 @@ public class GameReportService {
         StringBuilder sb = new StringBuilder();
 
         sb.append("You are a sports journalist specializing in NFL. ")
-          .append("Write a game recap in Portuguese, with 3 to 4 paragraphs, ")
+          .append("Write a game recap, with 3 to 4 paragraphs, ")
           .append("in a professional yet engaging tone, as if published on a sports website. ")
           .append("Use only the data provided below -- do not invent any statistics.\n\n");
 
