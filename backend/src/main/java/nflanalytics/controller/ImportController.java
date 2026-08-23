@@ -171,4 +171,37 @@ public class ImportController {
             return ResponseEntity.internalServerError().body("Failed to import depth charts: " + e.getMessage());
         }
     }
+
+    @PostMapping("/trades")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importTrades() {
+        try {
+            importService.importTrades();
+            return ResponseEntity.ok("Trades imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import trades: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/combine")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importCombine() {
+        try {
+            importService.importCombine();
+            return ResponseEntity.ok("Combine results imported successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import combine results: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/ftn-charting/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> importFtnCharting(@PathVariable int season) {
+        try {
+            importService.importFtnCharting(season);
+            return ResponseEntity.ok("FTN charting imported for season " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to import FTN charting: " + e.getMessage());
+        }
+    }
 }

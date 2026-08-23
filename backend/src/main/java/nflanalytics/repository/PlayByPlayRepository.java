@@ -10,4 +10,5 @@ public interface PlayByPlayRepository extends JpaRepository<PlayByPlay, Long> {
     Long countBySeason(Integer season);
 
     List<PlayByPlay> findByGame_IdOrderById(Long gameId);
+    PlayByPlay findByExternalPlayId(String externalPlayId);
 }

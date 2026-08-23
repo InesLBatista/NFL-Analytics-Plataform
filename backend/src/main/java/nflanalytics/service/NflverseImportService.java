@@ -17,9 +17,11 @@ import org.springframework.stereotype.Service;
 
 import com.opencsv.CSVReader;
 import lombok.RequiredArgsConstructor;
+import nflanalytics.model.CombineResult;
 import nflanalytics.model.Contract;
 import nflanalytics.model.DepthChartEntry;
 import nflanalytics.model.DraftPick;
+import nflanalytics.model.FtnCharting;
 import nflanalytics.model.Game;
 import nflanalytics.model.GameStats;
 import nflanalytics.model.Injury;
@@ -30,9 +32,12 @@ import nflanalytics.model.Player;
 import nflanalytics.model.PlayerStats;
 import nflanalytics.model.SnapCount;
 import nflanalytics.model.Team;
+import nflanalytics.model.Trade;
+import nflanalytics.repository.CombineResultRepository;
 import nflanalytics.repository.ContractRepository;
 import nflanalytics.repository.DepthChartRepository;
 import nflanalytics.repository.DraftPickRepository;
+import nflanalytics.repository.FtnChartingRepository;
 import nflanalytics.repository.GameRepository;
 import nflanalytics.repository.GameStatsRepository;
 import nflanalytics.repository.InjuryRepository;
@@ -43,6 +48,7 @@ import nflanalytics.repository.PlayerRepository;
 import nflanalytics.repository.PlayerStatsRepository;
 import nflanalytics.repository.SnapCountRepository;
 import nflanalytics.repository.TeamRepository;
+import nflanalytics.repository.TradeRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -63,6 +69,9 @@ public class NflverseImportService {
     private final ContractRepository contractRepository;
     private final NextGenStatRepository nextGenStatRepository;
     private final DepthChartRepository depthChartRepository;
+    private final TradeRepository tradeRepository;
+    private final CombineResultRepository combineResultRepository;
+    private final FtnChartingRepository ftnChartingRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     private jakarta.persistence.EntityManager entityManager;
@@ -879,6 +888,163 @@ public class NflverseImportService {
             }
 
             System.out.println("DepthChart imported: " + imported + " | connected to Player: " + linkedToPlayer + " | connected to Game: " + linkedToGame);
+        }
+    }
+
+
+    public void importTrades() throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/trades/trades.csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String seasonStr = getOrNull(row, col, "season");
+                String teamGiving = getOrNull(row, col, "gave");
+                if (seasonStr == null || teamGiving == null) continue;
+
+                Integer season = parseIntSafe(seasonStr);
+                String assetDescription = getOrNull(row, col, "trade_asset");
+                if (assetDescription == null) assetDescription = getOrNull(row, col, "value_desc");
+
+                if (tradeRepository.existsBySeasonAndTeamGivingAndAssetDescription(season, teamGiving, assetDescription)) {
+                    continue;
+                }
+
+                Trade trade = new Trade();
+                trade.setSeason(season);
+                trade.setTeamGiving(teamGiving);
+                trade.setTeamReceiving(getOrNull(row, col, "received"));
+                trade.setAssetDescription(assetDescription);
+
+                String dateStr = getOrNull(row, col, "trade_date");
+                if (dateStr != null) {
+                    try {
+                        trade.setTradeDate(java.time.LocalDate.parse(dateStr));
+                    } catch (Exception ignored) {}
+                }
+
+                tradeRepository.save(trade);
+                imported++;
+            }
+
+            System.out.println("Trades imported: " + imported);
+        }
+    }
+
+    public void importCombine() throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/combine/combine.csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlayer = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String playerName = getOrNull(row, col, "player_name");
+                String seasonStr = getOrNull(row, col, "season");
+                if (playerName == null || seasonStr == null) continue;
+
+                Integer season = parseIntSafe(seasonStr);
+
+                if (combineResultRepository.existsByPlayerNameAndSeason(playerName, season)) continue;
+
+                CombineResult cr = new CombineResult();
+                cr.setPlayerName(playerName);
+                cr.setSeason(season);
+                cr.setPosition(getOrNull(row, col, "pos"));
+                cr.setCollege(getOrNull(row, col, "school"));
+                cr.setHeightIn(parseDoubleSafe(getOrNull(row, col, "ht")));
+                cr.setWeightLb(parseDoubleSafe(getOrNull(row, col, "wt")));
+                cr.setFortyYardDash(parseDoubleSafe(getOrNull(row, col, "forty")));
+                cr.setBenchPressReps(parseDoubleSafe(getOrNull(row, col, "bench")));
+                cr.setVerticalJumpIn(parseDoubleSafe(getOrNull(row, col, "vertical")));
+                cr.setBroadJumpIn(parseDoubleSafe(getOrNull(row, col, "broad_jump")));
+                cr.setThreeConeDrill(parseDoubleSafe(getOrNull(row, col, "cone")));
+                cr.setTwentyYardShuttle(parseDoubleSafe(getOrNull(row, col, "shuttle")));
+
+                //combine uses pfr_id, not the direct gsis_id
+                String gsisId = getOrNull(row, col, "pfr_id"); 
+                if (gsisId != null) {
+                    Player player = playerRepository.findByExternalId(gsisId);
+                    if (player != null) {
+                        cr.setPlayer(player);
+                        linkedToPlayer++;
+                    }
+                }
+
+                combineResultRepository.save(cr);
+                imported++;
+            }
+
+            System.out.println("Combine imported: " + imported + " | connected to Player: " + linkedToPlayer);
+        }
+    }
+
+    public void importFtnCharting(int season) throws Exception {
+        String url = "https://github.com/nflverse/nflverse-data/releases/download/ftn_charting/ftn_charting_" + season + ".csv";
+
+        try (CSVReader reader = openCsvFromUrl(url)) {
+            String[] header = reader.readNext();
+            Map<String, Integer> col = mapColumns(header);
+            System.out.println("CSV header columns: " + Arrays.toString(header));
+
+            String[] row;
+            int imported = 0;
+            int linkedToPlay = 0;
+
+            while ((row = reader.readNext()) != null) {
+                String nflverseGameId = getOrNull(row, col, "nflverse_game_id");
+                String nflversePlayId = getOrNull(row, col, "nflverse_play_id");
+                if (nflverseGameId == null || nflversePlayId == null) continue;
+
+                //reconstruction of the same key used in play by play's import to go find the exact same play
+                String externalPlayId = nflverseGameId + "_" + nflversePlayId;
+                PlayByPlay play = playByPlayRepository.findByExternalPlayId(externalPlayId);
+                if (play == null) continue; 
+
+                if (ftnChartingRepository.existsByPlay_Id(play.getId())) continue;
+
+                FtnCharting charting = new FtnCharting();
+                charting.setPlay(play);
+                charting.setGame(play.getGame());
+                charting.setSeason(season);
+                charting.setWeek(parseIntSafe(getOrNull(row, col, "week")));
+
+                charting.setStartingHash(getOrNull(row, col, "starting_hash"));
+                charting.setQbLocation(getOrNull(row, col, "qb_location"));
+                charting.setOffenseBackfieldCount(parseIntSafe(getOrNull(row, col, "n_offense_backfield")));
+                charting.setDefenseBoxCount(parseIntSafe(getOrNull(row, col, "n_defense_box")));
+
+                charting.setIsNoHuddle(parseBooleanSafe(getOrNull(row, col, "is_no_huddle")));
+                charting.setIsMotion(parseBooleanSafe(getOrNull(row, col, "is_motion")));
+                charting.setIsPlayAction(parseBooleanSafe(getOrNull(row, col, "is_play_action")));
+                charting.setIsScreenPass(parseBooleanSafe(getOrNull(row, col, "is_screen_pass")));
+                charting.setIsRpo(parseBooleanSafe(getOrNull(row, col, "is_rpo")));
+                charting.setIsTrickPlay(parseBooleanSafe(getOrNull(row, col, "is_trick_play")));
+                charting.setIsQbOutOfPocket(parseBooleanSafe(getOrNull(row, col, "is_qb_out_of_pocket")));
+                charting.setIsInterceptionWorthy(parseBooleanSafe(getOrNull(row, col, "is_interception_worthy")));
+                charting.setIsThrowAway(parseBooleanSafe(getOrNull(row, col, "is_throw_away")));
+                charting.setIsCatchableBall(parseBooleanSafe(getOrNull(row, col, "is_catchable_ball")));
+                charting.setIsContestedBall(parseBooleanSafe(getOrNull(row, col, "is_contested_ball")));
+                charting.setIsDrop(parseBooleanSafe(getOrNull(row, col, "is_drop")));
+                charting.setIsQbSneak(parseBooleanSafe(getOrNull(row, col, "is_qb_sneak")));
+
+                ftnChartingRepository.save(charting);
+                imported++;
+                linkedToPlay++;
+            }
+
+            System.out.println("FtnCharting imported: " + imported + " | connected to a play: " + linkedToPlay);
         }
     }
 
