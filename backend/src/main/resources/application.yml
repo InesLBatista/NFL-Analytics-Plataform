@@ -34,3 +34,6 @@ admin:
 
 anthropic:
   api-key: ${ANTHROPIC_API_KEY:}
+
+voyage:
+  api-key: ${VOYAGE_API_KEY:}
