@@ -1,41 +1,30 @@
 ## Game Report Generation
 
-The platform includes an automated AI-powered game report feature. After each NFL game, the system generates a written summary that covers the most relevant events, standout performances, and key statistical highlights, without requiring any manual input. The reports are generated through a dedicated backend service that retrieves game data from the database, builds a structured prompt, and calls the Anthropic Claude API to produce the final text.
+The platform includes an automated AI-powered game report feature. After each NFL game, the system generates a written summary covering the most relevant events, standout performances, statistical highlights, and key turning points, without requiring any manual input. The reports are generated through a dedicated backend service that retrieves game data from the database, builds a structured prompt, and calls the Anthropic Claude API to produce the final text. Generated reports are persisted in the database linked to their game record, so subsequent requests for the same game return the stored result without triggering additional API calls.
 
-The process begins when a report is requested for a specific game. The service collects all relevant data from the database: the final score, home and away team information including conference and division, individual player statistics split by role (passing, rushing, receiving, and defensive), and team-level game statistics such as total yards, turnovers, third-down efficiency, penalties, and sacks. This data is then assembled into a natural language prompt that instructs the model to produce a concise and informative match report written from the perspective of a sports analyst.
-
-The current implementation covers the core statistical picture of a game. However, the richness of the reports is directly tied to the data available, and several data sources are still planned for import. As the dataset expands, the quality and depth of the generated reports will improve significantly. The sections below describe both the current state and the planned enhancements.
+The process begins when a report is requested for a specific game or for an entire week. The service aggregates all relevant data from the database, assembles it into a structured prompt, and instructs the model to write a 3 to 4 paragraph recap in Portuguese in a professional yet engaging tone, as if published on a sports website. The model is explicitly told not to invent statistics and to rely only on the data provided.
 
 ### Current Report Content
 
-The model is currently provided with tinstead of calling the endpoint game by game, need to create one that processes an entire week at once, with error handling per game and a small delay between calls to avoid hitting API's rate limits. Also, the new data expansion should be included in the report (officials, new game attributes added, draft picks, injuries, snap counts, etc)he following context per game:
+The prompt passed to the model currently includes the following data for each game:
 
-- Final score and game metadata (season, week, stadium, surface, roof type, temperature, wind)
-- Home and away team names, conference, and division
-- Player statistics per individual: passing attempts and completions, passing yards and touchdowns, interceptions, rushing attempts and yards, rushing touchdowns, targets, receptions, receiving yards and touchdowns, tackles, sacks, and forced fumbles
-- Team statistics per side: total offensive yards broken down into passing and rushing, turnovers, third-down conversion rate, sacks conceded, penalties, and penalty yards
+- Game metadata: season, week, stadium, roof type, surface, temperature, and wind conditions
+- Head coaches for both teams
+- Team statistics per side: total offensive yards broken down into passing and rushing, turnovers, sacks conceded, third-down conversion rate, penalties, and penalty yards
+- Top 5 players by combined total yards, with full stat lines split by category — completions and attempts, passing yards, touchdowns and interceptions for quarterbacks; carries, rushing yards, and touchdowns for running backs; targets, receptions, receiving yards, and touchdowns for receivers; and sack totals for defensive players
+- The 6 most decisive plays of the game ranked by absolute Expected Points Added, each identified by quarter and time remaining, giving the model the sequence of momentum-shifting moments
+- Injury report context split into two groups: players confirmed out with their primary and secondary injury designation, and players listed as Questionable, Doubtful, or Limited with their practice status, allowing the narrative to contextualise absences and unexpected lineup contributions
 
-From this input the model produces a structured narrative that identifies the key performers, explains the flow of the game through the statistical lens available, and highlights any notable outcomes such as dominant individual performances or significant special teams or defensive contributions.
+### Week-Level Generation
+
+Rather than requiring a separate API call per game, the system supports generating reports for an entire week in a single request. The week-level endpoint fetches all games for the given season and week, skips any that already have a stored report, and processes the remaining ones sequentially. Each game is handled independently so that an API failure on one matchup does not abort the rest of the slate. A 1500 millisecond delay is applied between calls to stay within Anthropic's rate limits. The response includes a structured summary with counts of generated, failed, and skipped games, along with a detailed error message for each failure identifying the matchup and the reason.
+
+### Endpoints
+
+A stored report for a specific game can be retrieved with GET /api/games/{gameId}/report. Generating or regenerating a single game report is done with POST /api/admin/games/{gameId}/generate-report, which requires admin authentication. The week-level batch endpoint is POST /api/admin/reports/season/{season}/week/{week} and returns the WeekReportResult summary rather than the individual report content.
 
 ### Planned Improvements
 
-The current single-game endpoint generates one report at a time. A week-level endpoint is needed that processes all games in a given week in a single call, with per-game error handling so that a failure on one game does not abort the rest. A small configurable delay between calls should be introduced to stay within the Anthropic API rate limits. This endpoint will simplify bulk report generation at the end of each Sunday slate or after a full week of games completes.
+The depth of the generated reports will continue to grow as additional data sources are integrated into the prompt. Snap count data will allow the narrative to include playing time context alongside raw statistics, which is particularly relevant for receivers and rotational players. Next Generation Stats such as average air yards, completion percentage above expectation, and yards after contact will add a layer of efficiency analysis beyond the traditional box score. Officials data will allow the report to note the officiating crew and flag games where penalty volume was unusually high. Draft background for players highlighted in the recap will add biographical context, particularly for rookies making notable contributions.
 
-As new data sources are imported into the platform the reports will gain considerably more depth:
-
-- Play-by-play data — with per-play EPA and WPA values already modelled, the service will be able to identify the highest-leverage moments of the game, describe the sequence of scoring drives, and quantify momentum shifts. This turns a static box score summary into a play-level narrative
-- Officials — knowing which officiating crew worked a game adds context to penalty counts and will allow the report to flag games where officiating had a measurable impact on the outcome
-- Draft picks — biographical context for players (college, draft round and pick) can be included when highlighting a standout performance, particularly for rookies or early-career players
-- Snap counts — percentage of offensive and defensive snaps played per player adds usage context to raw statistics. A receiver with high targets but low snap count tells a different story than one who played every snap
-- Injuries — pre-game and in-game injury information will allow the report to contextualise absences, explain unexpected lineup choices, and flag whether a key player's absence was a decisive factor
-
-These additions are already reflected in the data models and import service and will be progressively enabled in the prompt builder as their respective import pipelines are completed.
-
-### What Still Needs to Be Implemented
-
-Beyond the week-level batch endpoint and the data expansions above, the following is still pending on the report generation side:
-
-- Prompt versioning so that as new data fields become available the prompt template can be updated without breaking existing stored reports
-- Persistence of the generated report text in the database linked to the game record, avoiding redundant API calls for the same game
-- Exposure of the stored report through a dedicated REST endpoint so the frontend can fetch and display it directly
-- Frontend integration with a dedicated report view per game page, including a generation trigger for admin users and a display component for all users once the report exists
+On the infrastructure side, prompt versioning is planned so that the template can evolve as new data fields become available without affecting the content or validity of already-stored reports. Frontend integration of the report view per game page, including a generation trigger visible to admin users and a formatted display component for all users, remains to be implemented.
