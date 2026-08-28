@@ -42,4 +42,10 @@ public class DocumentChunkService {
     public int indexPlayerSeasonSummaries(Integer season) throws Exception {
         return ragIngestionService.indexPlayerSeasonSummaries(season);
     }
+
+    //indexes a full team-season profile for every team in the database
+    //combines record, coaching staff, team stats, draft picks, trades, and injury context
+    public int indexTeamSeasonSummaries(Integer season) throws Exception {
+        return ragIngestionService.indexTeamSeasonSummaries(season);
+    }
 }

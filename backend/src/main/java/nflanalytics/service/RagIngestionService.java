@@ -10,9 +10,11 @@ import lombok.RequiredArgsConstructor;
 import nflanalytics.model.DocumentChunk;
 import nflanalytics.model.GameReport;
 import nflanalytics.model.Player;
+import nflanalytics.model.Team;
 import nflanalytics.repository.DocumentChunkRepository;
 import nflanalytics.repository.GameReportRepository;
 import nflanalytics.repository.PlayerStatsRepository;
+import nflanalytics.repository.TeamRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +25,8 @@ public class RagIngestionService {
     private final JdbcTemplate jdbcTemplate;
     private final PlayerSummaryService playerSummaryService;
     private final PlayerStatsRepository playerStatsRepository;
+    private final TeamSummaryService teamSummaryService;
+    private final TeamRepository teamRepository;
 
     //index all GameReport without a DocumentChunk associated, no calling it again processes only the new ones
     public int indexAllGameReports() throws Exception {
@@ -90,6 +94,38 @@ public class RagIngestionService {
 
             indexed++;
             Thread.sleep(200); 
+        }
+        return indexed;
+    }
+
+    public int indexTeamSeasonSummaries(Integer season) throws Exception {
+        List<Team> teams = teamRepository.findAll();
+        int indexed = 0;
+
+        for (Team team : teams) {
+            if (documentChunkRepository.existsBySourceTypeAndSourceIdAndSeason("team_season_summary", team.getId(), season)) {
+                continue;
+            }
+
+            String summaryText = teamSummaryService.buildSeasonSummary(team, season);
+
+            DocumentChunk chunk = new DocumentChunk();
+            chunk.setContent(summaryText);
+            chunk.setSourceType("team_season_summary");
+            chunk.setSourceId(team.getId());
+            chunk.setSeason(season);
+            chunk.setCreatedAt(LocalDateTime.now());
+
+            chunk = documentChunkRepository.save(chunk);
+
+            float[] embedding = embeddingClient.embed(summaryText, "document");
+            String vectorLiteral = embeddingClient.toVectorLiteral(embedding);
+
+            jdbcTemplate.update("UPDATE document_chunks SET embedding = ?::vector WHERE id = ?",
+                    vectorLiteral, chunk.getId());
+
+            indexed++;
+            Thread.sleep(200);
         }
         return indexed;
     }

@@ -11,4 +11,6 @@ public interface GameStatsRepository extends JpaRepository<GameStats, Long> {
 
     //use on the import     
     boolean existsByGame_IdAndTeam_Id(Long gameId, Long teamId);
+
+    List<GameStats> findByTeam_IdAndGame_Season(Long teamId, Integer season);
 }

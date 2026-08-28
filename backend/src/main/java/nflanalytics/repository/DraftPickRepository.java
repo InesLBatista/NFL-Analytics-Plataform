@@ -9,4 +9,6 @@ import nflanalytics.model.DraftPick;
 public interface DraftPickRepository extends JpaRepository<DraftPick, Long> {
     boolean existsBySeasonAndRoundAndPick(Integer season, Integer round, Integer pick);
     List<DraftPick> findBySeason(Integer season);
+
+    List<DraftPick> findBySeasonAndTeam_Id(Integer season, Long teamId);
 }

@@ -12,4 +12,6 @@ public interface InjuryRepository extends JpaRepository<Injury, Long> {
     List<Injury> findByPlayer_IdAndSeasonOrderByWeek(Long playerId, Integer season);
     //injuries from both teams on a game to integrate the generated report
     List<Injury> findByGame_Id(Long gameId);
+
+    long countByTeamAndSeason(String team, Integer season);
 }

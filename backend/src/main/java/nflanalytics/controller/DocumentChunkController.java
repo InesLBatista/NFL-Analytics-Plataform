@@ -59,6 +59,18 @@ public class DocumentChunkController {
         }
     }
 
+    //indexes a full team-season profile for every team — record, coaching staff, team stats, draft picks, trades, and injury context
+    @PostMapping("/index/team-summaries/{season}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> indexTeamSeasonSummaries(@PathVariable Integer season) {
+        try {
+            int indexed = documentChunkService.indexTeamSeasonSummaries(season);
+            return ResponseEntity.ok("Indexed " + indexed + " team season summaries for " + season);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Team summary indexing failed: " + e.getMessage());
+        }
+    }
+
     //removes the existing embedding for a source and re-indexes it
     //use when a game report has been regenerated and its embedding is stale
     @DeleteMapping("/chunks/reindex")
