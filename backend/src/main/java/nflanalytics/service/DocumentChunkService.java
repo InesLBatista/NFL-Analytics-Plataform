@@ -36,4 +36,10 @@ public class DocumentChunkService {
     public int indexPending() throws Exception {
         return ragIngestionService.indexAllGameReports();
     }
+
+    //indexes a coherent player-season profile for every player that appeared in a given season
+    //combines stats, injuries, snap usage, and contract into a single document per player
+    public int indexPlayerSeasonSummaries(Integer season) throws Exception {
+        return ragIngestionService.indexPlayerSeasonSummaries(season);
+    }
 }

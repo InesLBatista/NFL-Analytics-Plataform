@@ -7,4 +7,5 @@ import nflanalytics.model.DocumentChunk;
 public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Long> {
     boolean existsBySourceTypeAndSourceId(String sourceType, Long sourceId);
     void deleteBySourceTypeAndSourceId(String sourceType, Long sourceId);
+    boolean existsBySourceTypeAndSourceIdAndSeason(String sourceType, Long sourceId, Integer season);
 }
