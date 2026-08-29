@@ -47,6 +47,16 @@ public class RagQueryService {
                 params.toArray()
         );
 
+
+        //if filters are too restrictive and found nothing to not return the "don't now"
+        if (relevantChunks.isEmpty() && (filters.season() != null || filters.sourceType() != null)) {
+            relevantChunks = jdbcTemplate.query(
+                "SELECT content FROM document_chunks ORDER BY embedding <->?::vector LIMIT 6",
+                (rs, rowNum) -> rs.getString("content"),
+                vectorLiteral
+            );
+        }
+
         if (relevantChunks.isEmpty()) {
             return "There is not enough indexed data available to answer that question yet.";
         }
