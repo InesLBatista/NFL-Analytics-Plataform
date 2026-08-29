@@ -32,8 +32,23 @@ public class QueryAnalysisService {
 
             JsonNode node = ObjectMapper.readTree(cleanJson);
 
-            Integer season = node.path("season").isNull() ? null : node.path("season").asInt();
-            String sourceType = node.path("sourceType").isNull() ? null : node.path("sourceType").asText();
+            Integer season = null;
+            JsonNode seasonNode = node.path("season");
+            if (!seasonNode.isMissingNode() && !seasonNode.isNull()) {
+                if (seasonNode.isNumber()) {
+                    season = seasonNode.asInt();
+                } else if (seasonNode.isString()) {
+                    try {
+                        season = Integer.parseInt(seasonNode.asString());
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+
+            String sourceType = null;
+            JsonNode sourceTypeNode = node.path("sourceType");
+            if (!sourceTypeNode.isMissingNode() && !sourceTypeNode.isNull()) {
+                sourceType = sourceTypeNode.asString();
+            }
 
             return new QueryFilters(season, sourceType);
         } catch (Exception e) {
