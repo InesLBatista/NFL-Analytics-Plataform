@@ -7,21 +7,18 @@ interface ErrorViewProps {
 
 function ErrorView({ message, onRetry }: ErrorViewProps) {
     return (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: `0 ${spacing.md}px` }}>
-            <p style={{ color: colors.danger, textAlign: "center", marginBottom: spacing.sm }}>
-                Error: {message}
-            </p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: 48, gap: spacing.sm }}>
+            <span style={{ color: colors.danger }}>Error: {message}</span>
             {onRetry && (
                 <button
                     onClick={onRetry}
                     style={{
                         border: `1px solid ${colors.border}`,
-                        padding: `${spacing.sm}px ${spacing.md}px`,
                         borderRadius: 6,
-                        background: "transparent",
-                        color: colors.textPrimary,
+                        padding: `${spacing.sm}px ${spacing.md}px`,
+                        background: "none",
                         cursor: "pointer",
-                        fontSize: 14,
+                        color: colors.textPrimary,
                     }}
                 >
                     Try again

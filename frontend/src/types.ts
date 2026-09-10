@@ -79,5 +79,6 @@ export interface GamePrediction {
 }
 
 export interface AssistantResponse {
+    question: string;
     answer: string;
 }

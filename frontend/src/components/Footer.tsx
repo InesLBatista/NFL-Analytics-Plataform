@@ -2,18 +2,18 @@ import { colors, spacing } from "../theme";
 
 function Footer() {
     return (
-        <div
+        <footer
             style={{
                 borderTop: `1px solid ${colors.border}`,
-                paddingTop: spacing.md,
-                marginTop: spacing.lg,
+                padding: `${spacing.md}px 0`,
+                marginTop: spacing.xl,
                 textAlign: "center",
+                fontSize: 12,
+                color: colors.textSecondary,
             }}
         >
-            <span style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Dados via nflverse • NFL Analytics Platform
-            </span>
-        </div>
+            Data imported via nflverse - NFL Analytics Platform
+        </footer>
     );
 }
 

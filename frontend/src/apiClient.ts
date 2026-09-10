@@ -1,12 +1,10 @@
 //centralized base URL — uses Vite env variable, falls back to the local backend port
-const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export class ApiError extends Error {
-    status: number;
-    constructor(message: string, status: number) {
+    constructor(message: string, public status: number) {
         super(message);
         this.name = "ApiError";
-        this.status = status;
     }
 }
 

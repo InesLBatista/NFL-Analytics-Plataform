@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import ScreenContainer from "../components/ScreenContainer";
-import LoadingView from "../components/LoadingView";
-import ErrorView from "../components/ErrorView";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiClient, ApiError } from "../apiClient";
 import { Game } from "../types";
 import { colors, spacing } from "../theme";
+import LoadingView from "../components/LoadingView";
+import ErrorView from "../components/ErrorView";
 
 function GamesPage() {
-    const [season] = useState(2024);
+    const [season, setSeason] = useState(2024);
     const [week, setWeek] = useState(1);
     const [games, setGames] = useState<Game[]>([]);
     const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ function GamesPage() {
         setError(null);
 
         apiClient
-            .get<Game[]>(`/api/games/season/${season}/week/${week}`)
+            .get<Game[]>(`/api/games?season=${season}&week=${week}`)
             .then((data) => {
                 setGames(data);
                 setLoading(false);
@@ -31,69 +31,90 @@ function GamesPage() {
 
     useEffect(() => {
         fetchGames();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [season, week]);
-
-    function goToPreviousWeek() {
-        if (week > 1) setWeek(week - 1);
-    }
-
-    function goToNextWeek() {
-        if (week < 18) setWeek(week + 1);
-    }
 
     if (loading) return <LoadingView message="Loading games..." />;
     if (error) return <ErrorView message={error} onRetry={fetchGames} />;
 
+    const finishedGames = games.filter((g) => g.status === "FINAL");
+
+    // dados no formato que o recharts espera: um objeto plano por barra
+    const chartData = finishedGames.map((g) => ({
+        matchup: g.homeTeam.abbreviation,
+        margin: (g.homeScore ?? 0) - (g.awayScore ?? 0),
+    }));
+
     return (
-        <ScreenContainer>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.textPrimary, margin: 0 }}>
-                NFL Games
-            </h1>
-            <p style={{ fontSize: 14, color: colors.textSecondary, marginBottom: spacing.md, marginTop: spacing.xs }}>
+        <div>
+            <h1 style={{ fontSize: 22, color: colors.textPrimary, marginBottom: 4 }}>NFL Games</h1>
+            <p style={{ fontSize: 14, color: colors.textSecondary, marginBottom: spacing.md }}>
                 Season {season} — Week {week}
             </p>
 
-            {/* week navigation */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: spacing.lg }}>
+            <div style={{ display: "flex", gap: spacing.sm, marginBottom: spacing.lg }}>
                 <button
-                    onClick={goToPreviousWeek}
-                    disabled={week <= 1}
-                    style={{ border: `1px solid ${colors.border}`, padding: `${spacing.sm}px ${spacing.md}px`, borderRadius: 6, background: "transparent", color: colors.textPrimary, cursor: week <= 1 ? "not-allowed" : "pointer", opacity: week <= 1 ? 0.4 : 1 }}
+                    onClick={() => week > 1 && setWeek(week - 1)}
+                    style={buttonStyle}
                 >
                     ← Previous
                 </button>
                 <button
-                    onClick={goToNextWeek}
-                    disabled={week >= 18}
-                    style={{ border: `1px solid ${colors.border}`, padding: `${spacing.sm}px ${spacing.md}px`, borderRadius: 6, background: "transparent", color: colors.textPrimary, cursor: week >= 18 ? "not-allowed" : "pointer", opacity: week >= 18 ? 0.4 : 1 }}
+                    onClick={() => week < 18 && setWeek(week + 1)}
+                    style={buttonStyle}
                 >
                     Next →
                 </button>
             </div>
 
-            {/* game list */}
-            {games.length === 0 ? (
-                <p style={{ color: colors.textSecondary }}>No games found for this week.</p>
-            ) : (
-                games.map((game) => (
+            {chartData.length > 0 && (
+                <div style={{ marginBottom: spacing.xl }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.textPrimary, marginBottom: spacing.sm }}>
+                        Margem de vitória (equipa da casa)
+                    </h3>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={chartData}>
+                            <CartesianGrid stroke={colors.border} vertical={false} />
+                            <XAxis dataKey="matchup" tick={{ fontSize: 12, fill: colors.textSecondary }} />
+                            <YAxis tick={{ fontSize: 12, fill: colors.textSecondary }} />
+                            <Tooltip />
+                            <Bar dataKey="margin" fill={colors.accent} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            <div>
+                {games.map((game) => (
                     <div
                         key={game.id}
-                        style={{ display: "flex", justifyContent: "space-between", paddingTop: spacing.sm, paddingBottom: spacing.sm, borderBottom: `1px solid ${colors.border}` }}
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: `${spacing.sm}px 0`,
+                            borderBottom: `1px solid ${colors.border}`,
+                        }}
                     >
                         <span style={{ color: colors.textPrimary }}>
                             {game.awayTeam.abbreviation} @ {game.homeTeam.abbreviation}
                         </span>
                         <span style={{ color: colors.textSecondary }}>
-                            {game.status === "FINAL"
-                                ? `${game.awayScore} - ${game.homeScore}`
-                                : game.status}
+                            {game.status === "FINAL" ? `${game.awayScore} - ${game.homeScore}` : game.status}
                         </span>
                     </div>
-                ))
-            )}
-        </ScreenContainer>
+                ))}
+            </div>
+        </div>
     );
 }
+
+const buttonStyle: React.CSSProperties = {
+    border: `1px solid ${colors.border}`,
+    borderRadius: 6,
+    padding: `${spacing.sm}px ${spacing.md}px`,
+    background: "none",
+    cursor: "pointer",
+    color: colors.textPrimary,
+    fontSize: 14,
+};
 
 export default GamesPage;
