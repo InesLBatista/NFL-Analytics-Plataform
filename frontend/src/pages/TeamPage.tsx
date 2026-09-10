@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient, ApiError } from "../apiClient";
-import { Team } from "../types";
+import type { Team } from "../types";
 import { colors, spacing } from "../theme";
 import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";

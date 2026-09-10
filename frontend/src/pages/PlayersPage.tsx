@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { apiClient, ApiError } from "../apiClient";
-import { Player, Team } from "../types";
+import type { Player, Team } from "../types";
 import { colors, spacing } from "../theme";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { Link } from "react-router-dom";
 import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";
 
@@ -119,28 +120,34 @@ function PlayersPage() {
             {!loading && !error && players.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: spacing.md }}>
                     {players.map((player) => (
-                        <div
+                        <Link
                             key={player.id}
-                            style={{
-                                border: `1px solid ${colors.border}`,
-                                borderRadius: 8,
-                                padding: spacing.md,
-                                backgroundColor: colors.surface,
-                            }}
+                            to={`/players/${player.id}`}
+                            style={{ textDecoration: "none" }}
                         >
-                            <div style={{ fontWeight: 600, color: colors.textPrimary }}>
-                                {player.fullName}
-                            </div>
-                            <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
-                                {player.position}
-                                {player.jerseyNumber !== null && ` • #${player.jerseyNumber}`}
-                            </div>
-                            {player.team && (
-                                <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 2 }}>
-                                    {player.team.name}
+                            <div
+                                style={{
+                                    border: `1px solid ${colors.border}`,
+                                    borderRadius: 8,
+                                    padding: spacing.md,
+                                    backgroundColor: colors.surface,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                <div style={{ fontWeight: 600, color: colors.textPrimary }}>
+                                    {player.fullName}
                                 </div>
-                            )}
-                        </div>
+                                <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
+                                    {player.position}
+                                    {player.jerseyNumber !== null && ` • #${player.jerseyNumber}`}
+                                </div>
+                                {player.team && (
+                                    <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 2 }}>
+                                        {player.team.name}
+                                    </div>
+                                )}
+                            </div>
+                        </Link>
                     ))}
                 </div>
             )}

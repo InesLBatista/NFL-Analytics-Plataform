@@ -82,3 +82,19 @@ export interface AssistantResponse {
     question: string;
     answer: string;
 }
+
+export interface Contract {
+    id: number;
+    player: Player | null;
+    playerName: string;
+    position: string | null;
+    team: string | null;
+    isActive: boolean;
+    yearSigned: number;
+    years: number | null;
+    totalValue: number | null;
+    apy: number | null;
+    guaranteedMoney: number | null;
+    apyCapPct: number | null;
+    otcId: number | null;
+}

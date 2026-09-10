@@ -7,7 +7,7 @@ import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";
 
 function GamesPage() {
-    const [season, setSeason] = useState(2024);
+    const [season] = useState(2024);
     const [week, setWeek] = useState(1);
     const [games, setGames] = useState<Game[]>([]);
     const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ function GamesPage() {
         setError(null);
 
         apiClient
-            .get<Game[]>(`/api/games?season=${season}&week=${week}`)
+            .get<Game[]>(`/api/games/season/${season}/week/${week}`)
             .then((data) => {
                 setGames(data);
                 setLoading(false);
