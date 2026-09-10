@@ -5,6 +5,7 @@ import type { Game } from "../types";
 import { colors, spacing } from "../theme";
 import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";
+import { Link } from "react-router-dom";
 
 function GamesPage() {
     const [season] = useState(2024);
@@ -38,7 +39,6 @@ function GamesPage() {
 
     const finishedGames = games.filter((g) => g.status === "FINAL");
 
-    // dados no formato que o recharts espera: um objeto plano por barra
     const chartData = finishedGames.map((g) => ({
         matchup: g.homeTeam.abbreviation,
         margin: (g.homeScore ?? 0) - (g.awayScore ?? 0),
@@ -85,22 +85,28 @@ function GamesPage() {
 
             <div>
                 {games.map((game) => (
-                    <div
+                    <Link
                         key={game.id}
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            padding: `${spacing.sm}px 0`,
-                            borderBottom: `1px solid ${colors.border}`,
-                        }}
+                        to={`/games/${game.id}`}
+                        style={{ textDecoration: "none" }}
                     >
-                        <span style={{ color: colors.textPrimary }}>
-                            {game.awayTeam.abbreviation} @ {game.homeTeam.abbreviation}
-                        </span>
-                        <span style={{ color: colors.textSecondary }}>
-                            {game.status === "FINAL" ? `${game.awayScore} - ${game.homeScore}` : game.status}
-                        </span>
-                    </div>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                padding: `${spacing.sm}px 0`,
+                                borderBottom: `1px solid ${colors.border}`,
+                                cursor: "pointer",
+                            }}
+                        >
+                            <span style={{ color: colors.textPrimary }}>
+                                {game.awayTeam.abbreviation} @ {game.homeTeam.abbreviation}
+                            </span>
+                            <span style={{ color: colors.textSecondary }}>
+                                {game.status === "FINAL" ? `${game.awayScore} - ${game.homeScore}` : game.status}
+                            </span>
+                        </div>
+                    </Link>
                 ))}
             </div>
         </div>

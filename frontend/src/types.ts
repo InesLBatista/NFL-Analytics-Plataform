@@ -98,3 +98,24 @@ export interface Contract {
     apyCapPct: number | null;
     otcId: number | null;
 }
+
+export interface GameStats {
+    id: number;
+    game: Game;
+    team: Team;
+    totalYards: number | null;
+    passingYards: number | null;
+    rushingYards: number | null;
+    turnovers: number | null;
+    sacks: number | null;
+    thirdDownConversions: number | null;
+    thirdDownAttempts: number | null;
+    penalties: number | null;
+    penaltyYards: number | null;
+}
+
+export interface ChatMessage {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+}
