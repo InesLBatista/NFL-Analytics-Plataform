@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { colors, spacing } from "../theme";
 import Footer from "./Footer";
 

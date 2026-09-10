@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiClient, ApiError } from "../apiClient";
-import { Game } from "../types";
+import type { Game } from "../types";
 import { colors, spacing } from "../theme";
 import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";

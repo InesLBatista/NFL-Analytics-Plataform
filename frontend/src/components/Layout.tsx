@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import Navbar from "./Navbar";
+import type { ReactNode } from "react";
+import Navbar from "./NavBar";
 import Footer from "./Footer";
 import { colors, spacing } from "../theme";
 

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
-import TeamsPage from "./pages/TeamsPage";
+import TeamsPage from "./pages/TeamPage";
 import GamesPage from "./pages/GamesPage";
 import PlayersPage from "./pages/PlayersPage";
 import AssistantPage from "./pages/AssistantPage";
