@@ -6,9 +6,22 @@ import type { Game, GameReport, GamePrediction, GameStats, PlayerStats } from ".
 import { colors, spacing } from "../theme";
 import LoadingView from "../components/LoadingView";
 import ErrorView from "../components/ErrorView";
+import { useAdminAction } from "../hooks/useAdminAction";
 
 function GameDetailPage() {
+    const actionButtonStyle: React.CSSProperties = {
+        border: "none",
+        borderRadius: 6,
+        padding: `${spacing.sm}px ${spacing.lg}px`,
+        backgroundColor: colors.accent,
+        color: "#FFFFFF",
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+    };
+    
     const { gameId } = useParams<{ gameId: string }>();
+    const { runAdminAction, pending: adminPending, error: adminError } = useAdminAction();
 
     const [game, setGame] = useState<Game | null>(null);
     const [report, setReport] = useState<GameReport | null>(null);
@@ -56,6 +69,26 @@ function GameDetailPage() {
         totalYards: ts.totalYards ?? 0,
     }));
 
+    async function handleGenerateReport() {
+        if (!gameId) return;
+
+        const result = await runAdminAction((credentials) =>
+            apiClient.post<GameReport>(`/api/admin/games/${gameId}/generate-report`, undefined, credentials)
+        );
+
+        if (result) setReport(result);
+    }
+
+    async function handleGeneratePrediction() {
+        if (!gameId) return;
+
+
+        apiClient
+            .get<GamePrediction>(`/api/games/${gameId}/prediction`)
+            .then(setPrediction)
+            .catch((err: ApiError) => console.error(err.message));
+    }
+
     return (
         <div>
             {/* Cabeçalho */}
@@ -78,7 +111,7 @@ function GameDetailPage() {
             )}
 
             {/* Previsão Elo */}
-            {prediction && (
+            {prediction ? (
                 <div
                     style={{
                         border: `1px solid ${colors.border}`,
@@ -101,6 +134,12 @@ function GameDetailPage() {
                             Prediction was {prediction.predictionCorrect ? "correct ✓" : "incorrect ✗"}
                         </p>
                     )}
+                </div>
+            ) : (
+                <div style={{ marginBottom: spacing.xl }}>
+                    <button onClick={handleGeneratePrediction} style={actionButtonStyle}>
+                        Generate prediction
+                    </button>
                 </div>
             )}
 
@@ -157,9 +196,17 @@ function GameDetailPage() {
                         {report.content}
                     </p>
                 ) : (
-                    <p style={{ fontSize: 13, color: colors.textSecondary }}>
-                        No recap generated yet for this game.
-                    </p>
+                    <div>
+                        <p style={{ fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm }}>
+                            No recap generated yet for this game.
+                        </p>
+                        <button onClick={handleGenerateReport} disabled={adminPending} style={actionButtonStyle}>
+                            {adminPending ? "Generating..." : "Generate report (admin)"}
+                        </button>
+                        {adminError && (
+                            <p style={{ fontSize: 12, color: colors.danger, marginTop: spacing.sm }}>{adminError}</p>
+                        )}
+                    </div>
                 )}
             </div>
         </div>
