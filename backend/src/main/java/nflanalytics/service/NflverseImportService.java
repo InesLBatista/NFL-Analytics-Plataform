@@ -697,6 +697,9 @@ public class NflverseImportService {
             String[] row;
             int imported = 0;
             int linkedToPlayer = 0;
+            // batch inserts to avoid one transaction per row — same pattern as play-by-play import
+            List<Contract> batch = new ArrayList<>();
+            final int BATCH_SIZE = 500;
 
             while ((row = reader.readNext()) != null) {
                 String playerName = getOrNull(row, col, "player");
@@ -704,7 +707,6 @@ public class NflverseImportService {
                 if (playerName == null || yearSignedStr == null) continue;
 
                 Integer yearSigned = parseIntSafe(yearSignedStr);
-
 
                 if (contractRepository.existsByPlayerNameAndYearSigned(playerName, yearSigned)) continue;
 
@@ -733,8 +735,21 @@ public class NflverseImportService {
                     }
                 }
 
-                contractRepository.save(contract);
+                batch.add(contract);
                 imported++;
+
+                if (batch.size() >= BATCH_SIZE) {
+                    contractRepository.saveAll(batch);
+                    entityManager.flush();
+                    entityManager.clear();
+                    batch.clear();
+                }
+            }
+
+            if (!batch.isEmpty()) {
+                contractRepository.saveAll(batch);
+                entityManager.flush();
+                entityManager.clear();
             }
 
             System.out.println("Imported contracts: " + imported + " | connected to Player: " + linkedToPlayer);

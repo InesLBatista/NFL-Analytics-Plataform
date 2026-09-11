@@ -109,4 +109,42 @@ public class EloRatingService {
                 .findTopByTeam_IdAndSeasonLessThanEqualOrderBySeasonDescWeekDesc(teamId, season - 1);
         return (rating != null) ? rating.getEloRating() : BASE_RATING;
     }
+
+    //incremental update for a single newly completed game
+    //reads the most recent stored rating for each team instead of reprocessing all history
+    //use this after weekly imports; only call recomputeAllRatings() when model parameters change
+    public void updateRatingsForGame(Game game) {
+        if (game.getStatus() != Game.GameStatus.FINAL) return;
+        if (game.getHomeScore() == null || game.getAwayScore() == null) return;
+
+        //skip if this game already has a rating snapshot saved
+        if (teamRatingRepository.existsByGame_Id(game.getId())) return;
+
+        Team home = game.getHomeTeam();
+        Team away = game.getAwayTeam();
+
+        double homeRating = getLatestRating(home.getId());
+        double awayRating = getLatestRating(away.getId());
+
+        double expectedHomeWin = 1.0 / (1.0 + Math.pow(10, (awayRating - homeRating - HOME_ADVANTAGE) / 400.0));
+
+        double actualHomeResult;
+        if (game.getHomeScore() > game.getAwayScore()) actualHomeResult = 1.0;
+        else if (game.getHomeScore() < game.getAwayScore()) actualHomeResult = 0.0;
+        else actualHomeResult = 0.5;
+
+        double marginMultiplier = calculateMarginMultiplier(game.getHomeScore(), game.getAwayScore(), homeRating, awayRating);
+        double newHomeRating = homeRating + K_FACTOR * marginMultiplier * (actualHomeResult - expectedHomeWin);
+        double newAwayRating = awayRating - K_FACTOR * marginMultiplier * (actualHomeResult - expectedHomeWin);
+
+        saveRatingSnapshot(home, game, newHomeRating);
+        saveRatingSnapshot(away, game, newAwayRating);
+    }
+
+    //returns the most recent stored rating for a team, or base rating if none exists
+    private double getLatestRating(Long teamId) {
+        TeamRating rating = teamRatingRepository
+                .findTopByTeam_IdAndSeasonLessThanEqualOrderBySeasonDescWeekDesc(teamId, 9999);
+        return (rating != null) ? rating.getEloRating() : BASE_RATING;
+    }
 }

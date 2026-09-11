@@ -41,4 +41,5 @@ voyage:
 automation:
   bootstrap-on-startup: true
   weekly-pipeline-enabled: false
+  weekly-data-import-enabled: false
   current-season: 2024
