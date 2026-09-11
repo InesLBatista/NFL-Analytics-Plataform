@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+Dockerfile      text eol=lf linguist-language=Dockerfile linguist-detectable=true
+Dockerfile.*    text eol=lf linguist-language=Dockerfile linguist-detectable=true
+*.dockerfile    text eol=lf linguist-language=Dockerfile linguist-detectable=true
+
+*.html          text eol=lf linguist-language=HTML linguist-detectable=true
+*.htm           text eol=lf linguist-language=HTML linguist-detectable=true
