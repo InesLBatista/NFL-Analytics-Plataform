@@ -119,3 +119,24 @@ export interface ChatMessage {
     role: "user" | "assistant";
     content: string;
 }
+
+export interface DraftPick {
+    id: number;
+    season: number;
+    round: number;
+    pick: number;
+    team: Team | null;
+    player: Player | null;
+    playerName: string;
+    position: string | null;
+    college: string | null;
+}
+
+export interface Trade {
+    id: number;
+    season: number;
+    tradeDate: string | null;
+    teamGiving: string;
+    teamReceiving: string;
+    assetDescription: string;
+}

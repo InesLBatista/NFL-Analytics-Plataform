@@ -22,4 +22,8 @@ public class DraftPickService {
         return draftPickRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("DraftPick not found with id: " + id));
     }
+
+    public List<DraftPick> getPicksBySeasonAndTeam(Long teamId, Integer season) {
+        return draftPickRepository.findBySeasonAndTeam_Id(season, teamId);
+    }
 }

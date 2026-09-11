@@ -1,6 +1,7 @@
 package nflanalytics.service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -22,5 +23,11 @@ public class TradeService {
     public Trade getTradeById(Long id) {
         return tradeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Trade not found with id: " + id));
+    }
+
+    public List<Trade> getByTeamAndSeason(String abbreviation, Integer season) {
+        return tradeRepository.findBySeason(season).stream()
+                .filter(t -> t.getTeamGiving().equals(abbreviation) || t.getTeamReceiving().equals(abbreviation))
+                .collect(Collectors.toList());
     }
 }

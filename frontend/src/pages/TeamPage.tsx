@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { apiClient, ApiError } from "../apiClient";
 import type { Team } from "../types";
 import { colors, spacing } from "../theme";
@@ -41,20 +42,22 @@ function TeamsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: spacing.md }}>
                 {teams.map((team) => (
-                    <div
-                        key={team.id}
-                        style={{
-                            border: `1px solid ${colors.border}`,
-                            borderRadius: 8,
-                            padding: spacing.md,
-                            backgroundColor: colors.surface,
-                        }}
-                    >
-                        <div style={{ fontWeight: 600, color: colors.textPrimary }}>{team.name}</div>
-                        <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
-                            {team.abbreviation} — {team.conference} {team.division}
+                    <Link key={team.id} to={`/teams/${team.abbreviation}`} style={{ textDecoration: "none" }}>
+                        <div
+                            style={{
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: 8,
+                                padding: spacing.md,
+                                backgroundColor: colors.surface,
+                                cursor: "pointer",
+                            }}
+                        >
+                            <div style={{ fontWeight: 600, color: colors.textPrimary }}>{team.name}</div>
+                            <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
+                                {team.abbreviation} — {team.conference} {team.division}
+                            </div>
                         </div>
-                    </div>
+                    </Link>
                 ))}
             </div>
         </div>
