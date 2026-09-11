@@ -37,3 +37,8 @@ anthropic:
 
 voyage:
   api-key: ${VOYAGE_API_KEY:}
+
+automation:
+  bootstrap-on-startup: true
+  weekly-pipeline-enabled: false
+  current-season: 2024
