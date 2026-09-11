@@ -35,7 +35,7 @@ public class RagQueryService {
         }
         if (filters.sourceType() != null) {
             sql.append(" AND source_type = ?");
-            params.add(filters.season());
+            params.add(filters.sourceType());
         }
 
         sql.append(" ORDER BY embedding <-> ?::vector LIMIT 6");

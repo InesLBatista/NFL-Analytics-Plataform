@@ -15,6 +15,10 @@ function AssistantPage() {
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // generated once per browser session — used only to group log entries on the backend
+    // stored in a ref so it never changes between renders and does not trigger re-renders
+    const sessionId = useRef<string>(crypto.randomUUID());
+
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -32,7 +36,7 @@ function AssistantPage() {
         setError(null);
 
         apiClient
-            .post<AssistantResponse>("/api/assistant/ask", { question: trimmed })
+            .post<AssistantResponse>("/api/assistant/ask", { question: trimmed, sessionId: sessionId.current })
             .then((response) => {
                 const assistantMessage: ChatMessage = {
                     id: crypto.randomUUID(),

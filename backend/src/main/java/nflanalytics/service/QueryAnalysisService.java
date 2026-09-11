@@ -1,60 +1,75 @@
 package nflanalytics.service;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.springframework.stereotype.Service;
 
-import lombok.RequiredArgsConstructor;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 //extraction of structured filters from a question before vectorial search
+//uses regex rules instead of calling the LLM API — avoids an extra API call per user question
 @Service
-@RequiredArgsConstructor
 public class QueryAnalysisService {
-    private final AnthropicClient anthropicClient;
-    private final ObjectMapper ObjectMapper = new ObjectMapper();
 
     public record QueryFilters(Integer season, String sourceType) {}
 
+    // matches a 4-digit year in the range 1990–2099 (covers all NFL seasons likely to be in the DB)
+    private static final Pattern SEASON_PATTERN = Pattern.compile("\\b(19[9][0-9]|20[0-9]{2})\\b");
+
+    // keywords that suggest the question is about a specific game or match
+    private static final Pattern GAME_PATTERN = Pattern.compile(
+        "\\b(game|match|matchup|recap|report|score|quarter|half|overtime|ot|week \\d+)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // keywords that suggest the question is about a player
+    private static final Pattern PLAYER_PATTERN = Pattern.compile(
+        "\\b(player|quarterback|qb|running back|rb|wide receiver|wr|tight end|te|" +
+        "linebacker|lb|cornerback|cb|safety|defensive end|de|offensive line|ol|" +
+        "stats|statistics|yards|touchdowns|interceptions|sacks|snap|contract|salary|injury|injured)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // keywords that suggest the question is about a team as a whole
+    private static final Pattern TEAM_PATTERN = Pattern.compile(
+        "\\b(team|franchise|season record|win|loss|wins|losses|coach|coaching|" +
+        "draft|trade|roster|offense|defense|special teams|standings|division|conference|playoff)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
     public QueryFilters analyze(String question) {
-        String prompt = "Analyze the user's question about NFL and extract two fields, " +
-                "responding ONLY with a JSON object, without additional text or markdown:\n\n" +
-                "- \"season\": the year of the season mentioned (e.g., 2024), or null if not mentioned\n" +
-                "- \"sourceType\": one of these exact values, or null if not clear:\n" +
-                "  \"game_report\" (question about a specific game)\n" +
-                "  \"player_season_summary\" (question about a player)\n" +
-                "  \"team_season_summary\" (question about a team)\n\n" +
-                "Question: \"" + question + "\"\n\n" +
-                "Respond only with the JSON, for example: {\"season\": 2024, \"sourceType\": \"team_season_summary\"}";
+        if (question == null || question.isBlank()) return new QueryFilters(null, null);
 
-        try {
-            String response = anthropicClient.generateText(prompt);
-            String cleanJson = response.replaceAll("```json", "").replaceAll("```", "").trim();
-
-            JsonNode node = ObjectMapper.readTree(cleanJson);
-
-            Integer season = null;
-            JsonNode seasonNode = node.path("season");
-            if (!seasonNode.isMissingNode() && !seasonNode.isNull()) {
-                if (seasonNode.isNumber()) {
-                    season = seasonNode.asInt();
-                } else if (seasonNode.isString()) {
-                    try {
-                        season = Integer.parseInt(seasonNode.asString());
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-
-            String sourceType = null;
-            JsonNode sourceTypeNode = node.path("sourceType");
-            if (!sourceTypeNode.isMissingNode() && !sourceTypeNode.isNull()) {
-                sourceType = sourceTypeNode.asString();
-            }
-
-            return new QueryFilters(season, sourceType);
-        } catch (Exception e) {
-            //in case of error, degrading into no filters search
-            System.out.println("Error analyzing the question, proceding without filters: " + e.getMessage());
-            return new QueryFilters(null, null);
+        // extract season year if explicitly mentioned
+        Integer season = null;
+        Matcher seasonMatcher = SEASON_PATTERN.matcher(question);
+        if (seasonMatcher.find()) {
+            try {
+                season = Integer.parseInt(seasonMatcher.group(1));
+            } catch (NumberFormatException ignored) {}
         }
+
+        // determine source type by counting keyword matches per category
+        // the category with the most matches wins; ties and empty results return null (no filter)
+        int gameScore   = countMatches(GAME_PATTERN,   question);
+        int playerScore = countMatches(PLAYER_PATTERN, question);
+        int teamScore   = countMatches(TEAM_PATTERN,   question);
+
+        String sourceType = null;
+        int maxScore = Math.max(gameScore, Math.max(playerScore, teamScore));
+
+        if (maxScore > 0) {
+            if (gameScore == maxScore)        sourceType = "game_report";
+            else if (playerScore == maxScore) sourceType = "player_season_summary";
+            else                              sourceType = "team_season_summary";
+        }
+
+        return new QueryFilters(season, sourceType);
+    }
+
+    private int countMatches(Pattern pattern, String text) {
+        int count = 0;
+        Matcher m = pattern.matcher(text);
+        while (m.find()) count++;
+        return count;
     }
 }
